@@ -9,15 +9,22 @@ public interface IExteriorService : IHostedService
   int DivisionMin { get; }
   int DivisionMax { get; }
 
+  event EventHandler? OnDivisionChange;
+
   PlotSize? GetPlotSize(sbyte plot);
   IEnumerable<Facade> GetCurrentFacades();
+  FestivalFacade? GetCurrentFestivalFacade();
+  unsafe void UpdateFestival(bool reset = false);
   unsafe void UpdateExteriors(bool reset = false);
 }
 
 public class ExteriorService(ILogger _logger, Configuration _configuration, IFramework _framework, IClientState _clientState, IPlayerState _playerState) : IExteriorService
 {
   private readonly Dictionary<int, OutdoorPlotExteriorData> _originalExteriorData = [];
+  private readonly List<ushort> _originalFestival = [];
   private bool _wasNotLoaded = false;
+
+  public event EventHandler? OnDivisionChange;
 
   public uint CurrentWorld => _playerState.CurrentWorld.RowId;
   private unsafe HousingManager* _housingManager => HousingManager.Instance();
@@ -72,6 +79,7 @@ public class ExteriorService(ILogger _logger, Configuration _configuration, IFra
     _framework.Update -= OnFrameworkUpdate;
 
     UpdateExteriors(true);
+    UpdateFestival(true);
 
     _logger.ServiceLifecycle();
     return Task.CompletedTask;
@@ -82,6 +90,12 @@ public class ExteriorService(ILogger _logger, Configuration _configuration, IFra
   {
     bool shouldUpdateExteriors = false;
 
+    if (CurrentDistrict != _lastDistrict || CurrentWard != _lastWard)
+    {
+      _originalFestival.Clear();
+      UpdateFestival();
+    }
+
     if (CurrentDistrict != _lastDistrict || CurrentWard != _lastWard || CurrentDivision != _lastDivision)
     {
       _lastDistrict = CurrentDistrict;
@@ -90,19 +104,19 @@ public class ExteriorService(ILogger _logger, Configuration _configuration, IFra
 
       _originalExteriorData.Clear();
       shouldUpdateExteriors = true;
+
+      OnDivisionChange?.Invoke(this, new());
     }
 
     if (CurrentPlot != _lastPlot)
     {
       _lastPlot = CurrentPlot;
-
       shouldUpdateExteriors = true;
     }
 
     if (_wasNotLoaded)
     {
       _wasNotLoaded = false;
-
       shouldUpdateExteriors = true;
     }
 
@@ -112,6 +126,54 @@ public class ExteriorService(ILogger _logger, Configuration _configuration, IFra
   public IEnumerable<Facade> GetCurrentFacades()
   {
     return _configuration.Facades.Where(facade => facade.World == CurrentWorld && facade.District == CurrentDistrict && facade.Ward == CurrentWard && facade.Plot >= DivisionMin && facade.Plot < DivisionMax);
+  }
+
+  public FestivalFacade? GetCurrentFestivalFacade()
+  {
+    return _configuration.FestivalFacades.FirstOrDefault(facade => facade.World == CurrentWorld && facade.District == CurrentDistrict && facade.Ward == CurrentWard);
+  }
+
+  private unsafe void SetFestival(List<ushort> festivalIds)
+  {
+    if (festivalIds.Count != 8)
+    {
+      _logger.Error($"wrong list length: {festivalIds.Count}");
+      return;
+    }
+
+    uint* festivalArray = stackalloc uint[] { 0, 0, 0, 0, 0, 0, 0, 0 };
+    for (int i = 0; i < 8; i++)
+    {
+      festivalArray[i] = festivalIds[i];
+    }
+
+    if (_layoutWorld == null || _layoutWorld->ActiveLayout == null) return;
+    _layoutWorld->ActiveLayout->SetActiveFestivals((GameMain.Festival*)festivalArray);
+  }
+
+  public unsafe void UpdateFestival(bool reset = false)
+  {
+    if (_layoutWorld == null || _layoutWorld->ActiveLayout == null) return;
+    FestivalFacade? festivalFacade = GetCurrentFestivalFacade();
+
+    if (_originalFestival.Count == 8 && (festivalFacade == null || reset))
+    {
+      SetFestival(_originalFestival);
+      _originalFestival.Clear();
+    }
+    else if (festivalFacade != null && !reset)
+    {
+      if (_originalFestival.Count == 0)
+      {
+        foreach (GameMain.Festival festival in _layoutWorld->ActiveLayout->ActiveFestivals)
+        {
+          _originalFestival.Add(festival.Id);
+        }
+      }
+
+      List<ushort> currentFestivalIds = [festivalFacade.Id, 0, 0, 0, 0, 0, 0, 0];
+      SetFestival(currentFestivalIds);
+    }
   }
 
   public unsafe void UpdateExteriors(bool reset = false)

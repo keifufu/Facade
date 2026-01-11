@@ -54,11 +54,21 @@ public class Facade
 }
 
 [Serializable]
+public class FestivalFacade
+{
+  public required uint World;
+  public required District District;
+  public required sbyte Ward;
+  public required ushort Id;
+}
+
+[Serializable]
 public class Configuration : IPluginConfiguration
 {
   public int Version { get; set; } = 0;
 
   public List<Facade> Facades { get; set; } = [];
+  public List<FestivalFacade> FestivalFacades { get; set; } = [];
 
   [NonSerialized]
   private IDalamudPluginInterface? PluginInterface;

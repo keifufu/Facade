@@ -1,10 +1,6 @@
-
-using Dalamud.Utility;
-using Lumina.Extensions;
-
 namespace Facade.Windows;
 
-public class ConfigWindow(Configuration _configuration, IExteriorService _exteriorService, IDataManager _dataManager, IDalamudPluginInterface _pluginInterface, ITextureProvider _textureProvider) : Window("Facade##FacadeConfigWindow")
+public class ConfigWindow(ILogger _logger, Configuration _configuration, IExteriorService _exteriorService, IDataManager _dataManager, IDalamudPluginInterface _pluginInterface, ITextureProvider _textureProvider) : Window("Facade##FacadeConfigWindow"), IHostedService
 {
   private bool _addingFacade = false;
   private Facade? _editingFacade = null;
@@ -12,8 +8,24 @@ public class ConfigWindow(Configuration _configuration, IExteriorService _exteri
   private Int128 _selectedExterior = Facade.Pack(null, null, null, null, null, null, null, null);
   private Int128 _selectedStain = Facade.Pack(null, null, null, null, null, null, null, null);
   private bool _unitedExteriorSelection = true;
+  private bool _festivalView = false;
 
-  private List<ExteriorItem> _cachedExteriorItems = [];
+  private readonly List<Festival> _festivals = [
+    new Festival { Id = ushort.MaxValue, Name = "No override" },
+    new Festival { Id = 00, Name = "None" },
+    new Festival { Id = 50, Name = "Heavensturn" },
+    new Festival { Id = 45, Name = "Valentione's Day" },
+    new Festival { Id = 46, Name = "Little Ladies' Day" },
+    new Festival { Id = 47, Name = "Hatching Tide" },
+    new Festival { Id = 48, Name = "Make It Rain" },
+    new Festival { Id = 53, Name = "Moonfire Faire" },
+    new Festival { Id = 54, Name = "The Rising" },
+    new Festival { Id = 42, Name = "All Saint's Wake" },
+    new Festival { Id = 59, Name = "Starlight Celebration" },
+    new Festival { Id = 43, Name = "Starlight Celebration (No Snow)" },
+  ];
+
+  private readonly List<ExteriorItem> _cachedExteriorItems = [];
   private List<ExteriorItem> ExteriorItems
   {
     get
@@ -74,12 +86,9 @@ public class ConfigWindow(Configuration _configuration, IExteriorService _exteri
     });
   });
 
-  private float ScaledFloat(float value) => value * ImGuiHelpers.GlobalScale;
-  private Vector2 ScaledVector2(float x, float? y = null) => new Vector2(x, y ?? x) * ImGuiHelpers.GlobalScale;
-
-  public override void Draw()
+  public Task StartAsync(CancellationToken cancellationToken)
   {
-    using IDisposable _ = _uiFont.Push();
+    _exteriorService.OnDivisionChange += OnDivisionChange;
 
     Flags = ImGuiWindowFlags.NoResize | ImGuiWindowFlags.NoScrollbar | ImGuiWindowFlags.AlwaysAutoResize;
     SizeCondition = ImGuiCond.Always;
@@ -90,31 +99,77 @@ public class ConfigWindow(Configuration _configuration, IExteriorService _exteri
       MaximumSize = new(300, (_addingFacade || _editingFacade != null) && !_unitedExteriorSelection ? 999 : 300)
     };
 
+    _logger.ServiceLifecycle();
+    return Task.CompletedTask;
+  }
+
+  public Task StopAsync(CancellationToken cancellationToken)
+  {
+    _exteriorService.OnDivisionChange -= OnDivisionChange;
+
+    _logger.ServiceLifecycle();
+    return Task.CompletedTask;
+  }
+
+  private void OnDivisionChange(object? sender, object _)
+  {
+    _editingFacade = null;
+    _addingFacade = false;
+  }
+
+  private float ScaledFloat(float value) => value * ImGuiHelpers.GlobalScale;
+  private Vector2 ScaledVector2(float x, float? y = null) => new Vector2(x, y ?? x) * ImGuiHelpers.GlobalScale;
+
+  public override void Draw()
+  {
+    using IDisposable _ = _uiFont.Push();
     if (DrawEditScreen()) return;
 
-    bool buttonDisabled = _exteriorService.CurrentDivision == 0;
-    using (ImRaii.PushStyle(ImGuiStyleVar.Alpha, ImGui.GetStyle().Alpha * 0.5f, buttonDisabled))
+    bool buttonsDisabled = _exteriorService.CurrentDivision == 0;
+    bool addButtonDisabled = buttonsDisabled || _festivalView;
+    bool addButtonHovered = false;
+    using (ImRaii.PushStyle(ImGuiStyleVar.Alpha, ImGui.GetStyle().Alpha * 0.5f, buttonsDisabled))
     {
-      if (ImGui.Button("Add Facade", new(ImGui.GetContentRegionAvail().X, ScaledFloat(30))))
+      using (ImRaii.PushStyle(ImGuiStyleVar.Alpha, ImGui.GetStyle().Alpha * 0.5f, addButtonDisabled))
       {
-        if (!buttonDisabled)
+        if (ImGui.Button("Add Facade", new(ImGui.GetContentRegionAvail().X - ScaledFloat(44), ScaledFloat(35))))
         {
-          _selectedPlot = null;
-          _selectedExterior = Facade.Pack(null, null, null, null, null, null, null, null);
-          _selectedStain = Facade.Pack(null, null, null, null, null, null, null, null);
-          _unitedExteriorSelection = true;
-          _addingFacade = true;
+          if (!buttonsDisabled && !addButtonDisabled)
+          {
+            _selectedPlot = null;
+            _selectedExterior = Facade.Pack(null, null, null, null, null, null, null, null);
+            _selectedStain = Facade.Pack(null, null, null, null, null, null, null, null);
+            _unitedExteriorSelection = true;
+            _addingFacade = true;
+          }
+        }
+        addButtonHovered = ImGui.IsItemHovered();
+      }
+      ImGui.SameLine();
+      if (ImGuiComponents.IconButton($"##SwitchButton", _festivalView ? FontAwesomeIcon.Snowflake : FontAwesomeIcon.HouseChimney, new(35)))
+      {
+        if (!buttonsDisabled)
+        {
+          _festivalView = !_festivalView;
+        }
+      }
+
+      if (ImGui.IsItemHovered() && !buttonsDisabled)
+      {
+        using (ImRaii.Tooltip())
+        {
+          ImGui.Text(_festivalView ? "Switch to Exterior Facades" : "Switch to Festival Facades");
         }
       }
     }
 
-    if (buttonDisabled)
+    if (buttonsDisabled)
     {
-      if (ImGui.IsItemHovered())
+      if (addButtonHovered || ImGui.IsItemHovered())
       {
         using (ImRaii.Tooltip())
         {
-          ImGui.Text("Visit the Ward you want to modify an exterior in first.");
+          ImGui.Text("Visit the ward you want to modify an exterior in first.");
         }
       }
     }
@@ -122,7 +177,8 @@ public class ConfigWindow(Configuration _configuration, IExteriorService _exteri
     using (ImRaii.IEndObject child = ImRaii.Child("##facadeList"))
     {
       if (!child.Success) return;
-      DrawFacadeList();
+      if (_festivalView) DrawFestivalFacadeList();
+      else DrawFacadeList();
     }
   }
 
@@ -155,6 +211,70 @@ public class ConfigWindow(Configuration _configuration, IExteriorService _exteri
     return stainName;
   }
 
+  private void DrawFestivalFacadeList()
+  {
+    using (ImRaii.Disabled(_exteriorService.CurrentDivision == 0))
+    {
+      ImGui.Dummy(ScaledVector2(4));
+
+      FestivalFacade? currentFestivalFacade = _exteriorService.GetCurrentFestivalFacade();
+      ushort currentFestivalId = currentFestivalFacade == null ? ushort.MaxValue : currentFestivalFacade.Id;
+      Festival currentFestival = _festivals.Find(festival => festival.Id == currentFestivalId);
+
+      ImGui.SetNextItemWidth(ImGui.GetContentRegionAvail().X);
+      using (ImRaii.IEndObject combo = ImRaii.Combo("###festivalCombo", currentFestival.Name))
+      {
+        if (combo.Success)
+        {
+          foreach (Festival festival in _festivals)
+          {
+            if (ImGui.Selectable(festival.Name, currentFestivalId == festival.Id))
+            {
+              if (currentFestivalFacade != null && festival.Id == ushort.MaxValue)
+              {
+                _configuration.FestivalFacades.Remove(currentFestivalFacade);
+              }
+              else if (currentFestivalFacade != null && festival.Id != ushort.MaxValue)
+              {
+                currentFestivalFacade.Id = festival.Id;
+              }
+              else if (currentFestivalFacade == null)
+              {
+                _configuration.FestivalFacades.Add(new FestivalFacade()
+                {
+                  World = _exteriorService.CurrentWorld,
+                  District = _exteriorService.CurrentDistrict,
+                  Ward = _exteriorService.CurrentWard,
+                  Id = festival.Id,
+                });
+              }
+
+              _configuration.Save();
+              _exteriorService.UpdateFestival();
+            }
+          }
+        }
+      }
+
+      int otherFacadeCount = _configuration.FestivalFacades.Count - (currentFestivalFacade == null ? 0 : 1);
+      string pluralText = otherFacadeCount == 1 ? "" : "s";
+      DrawCenteredText($"{otherFacadeCount} other Festival Facade{pluralText} in other wards.", true, false);
+      if (ImGui.IsItemHovered())
+      {
+        using (ImRaii.Tooltip())
+        {
+          ImGui.Text("You can only change the Festival Facade of the current ward.");
+        }
+      }
+    }
+
+    using (ImRaii.Disabled())
+    {
+      ImGui.Dummy(ScaledVector2(8));
+      ImGui.TextWrapped("Switching from an override back to 'No override' might not re-apply the original festival. Re-visit the current ward to fix this.");
+    }
+  }
+
   private void DrawFacadeList()
   {
     IEnumerable<Facade> facades = _exteriorService.GetCurrentFacades();
@@ -183,9 +303,17 @@ public class ConfigWindow(Configuration _configuration, IExteriorService _exteri
         {
           ImGui.TableNextRow();
           ImGui.TableNextColumn();
-          ISharedImmediateTexture? icon = GetExteriorIcon(facade.Plot, facade);
+          (ISharedImmediateTexture? icon, string iconDescription) = GetExteriorIcon(facade.Plot, facade);
           if (icon == null) continue;
           ImGui.Image(icon.GetWrapOrEmpty().Handle, ScaledVector2(40));
+
+          if (ImGui.IsItemHovered())
+          {
+            using (ImRaii.Tooltip())
+            {
+              ImGui.Text(iconDescription);
+            }
+          }
 
           ImGui.TableNextColumn();
           string stainName = DrawColorCircle(Facade.Unpack(facade.PackedStainIds).u1, 28, 6);
@@ -227,21 +355,27 @@ public class ConfigWindow(Configuration _configuration, IExteriorService _exteri
     }
   }
 
-  private ISharedImmediateTexture? GetExteriorIcon(sbyte plot, Facade? facade)
+  private (ISharedImmediateTexture? icon, string description) GetExteriorIcon(sbyte plot, Facade? facade)
   {
     PlotSize? plotSize = _exteriorService.GetPlotSize(plot);
     uint defaultIconId = 60751 + (uint)(plotSize ?? 0);
     uint individualIconId = 60761 + (uint)(plotSize ?? 0);
     uint unitedIconId = defaultIconId;
+    string description = "Existing Exterior";
     if (facade != null)
     {
       ExteriorItem? exteriorItem = ExteriorItems.FirstOrNull(item => item.Id == facade.PackedExteriorIds);
       if (exteriorItem != null && exteriorItem.HasValue && exteriorItem.Value.UnitedExteriorId != null)
+      {
         unitedIconId = (uint)exteriorItem.Value.UnitedExteriorId - 276880;
+        description = exteriorItem.Value.Name;
+      }
+
+      if (!facade.IsUnitedExterior) description = "Mixed Individual Exterior";
     }
     uint iconId = facade == null ? defaultIconId : facade.IsUnitedExterior ? unitedIconId : individualIconId;
-    if (!_textureProvider.TryGetFromGameIcon(new GameIconLookup(iconId), out ISharedImmediateTexture? icon)) return null;
-    return icon;
+    if (!_textureProvider.TryGetFromGameIcon(new GameIconLookup(iconId), out ISharedImmediateTexture? icon)) return (null, "Unknown");
+    return (icon, description);
   }
 
   private bool DrawEditScreen()
@@ -359,7 +493,7 @@ public class ConfigWindow(Configuration _configuration, IExteriorService _exteri
   {
     IEnumerable<Facade> facades = _exteriorService.GetCurrentFacades();
     ImGui.SetNextItemWidth(ImGui.GetContentRegionAvail().X);
-    using (ImRaii.IEndObject dropdown = ImRaii.Combo("###PlotSelect", _selectedPlot == null ? "Select Plot" : _selectedPlot.ToString()))
+    using (ImRaii.IEndObject dropdown = ImRaii.Combo("##PlotSelect", _selectedPlot == null ? "Select Plot" : _selectedPlot.ToString()))
     {
       if (!dropdown.Success) return;
       for (int i = _exteriorService.DivisionMin + 1; i < _exteriorService.DivisionMax + 1; i++)
@@ -443,11 +577,11 @@ public class ConfigWindow(Configuration _configuration, IExteriorService _exteri
     ImGui.SetNextItemWidth(ImGui.GetContentRegionAvail().X);
 
     string selectedExterior = ExteriorItems.Find(item => item.Id == exterior && item.Type == type).Name ?? $"Existing {text}";
-    using (ImRaii.IEndObject dropdown = ImRaii.Combo($"###ExteriorSelect{text}", selectedExterior))
+    using (ImRaii.IEndObject dropdown = ImRaii.Combo($"##ExteriorSelect{text}", selectedExterior))
     {
       if (!dropdown.Success) return;
 
-      ISharedImmediateTexture? icon2 = GetExteriorIcon((sbyte)((_selectedPlot ?? 0) - 1), null);
+      ISharedImmediateTexture? icon2 = GetExteriorIcon((sbyte)((_selectedPlot ?? 0) - 1), null).icon;
       if (icon2 == null) return;
       ImGui.Image(icon2.GetWrapOrEmpty().Handle, ScaledVector2(16));
       ImGui.SameLine();
@@ -537,7 +671,7 @@ public class ConfigWindow(Configuration _configuration, IExteriorService _exteri
     Stain? selectedStain = _dataManager.GetExcelSheet<Stain>().GetRowOrDefault(stain ?? 0);
     string selectedStainString = stain == null || selectedStain == null || !selectedStain.HasValue ? text.IsNullOrEmpty() ? "Existing Color" : $"Existing {text} Color" : selectedStain.Value.Name.ToString();
     ImGui.SetNextItemWidth(ImGui.GetContentRegionAvail().X);
-    using (ImRaii.IEndObject dropdown = ImRaii.Combo($"###StainSelect{text}", selectedStainString))
+    using (ImRaii.IEndObject dropdown = ImRaii.Combo($"##StainSelect{text}", selectedStainString))
     {
       if (!dropdown.Success) return;
 
@@ -574,4 +708,10 @@ public struct ExteriorItem
   public required string Name;
   public required ushort Icon;
   public required uint? UnitedExteriorId;
+}
+
+public struct Festival
+{
+  public required ushort Id { get; set; }
+  public required string Name { get; set; }
 }

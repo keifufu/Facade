@@ -48,9 +48,10 @@ public sealed class Plugin : IDalamudPlugin
         collection.AddSingleton(InitializeConfiguration);
         collection.AddSingleton(new WindowSystem(pluginInterface.InternalName));
 
-        collection.AddHostedService(sp => sp.GetRequiredService<IExteriorService>());
+        collection.AddHostedService(sp => sp.GetRequiredService<ConfigWindow>());
         collection.AddHostedService(sp => sp.GetRequiredService<IWindowService>());
         collection.AddHostedService(sp => sp.GetRequiredService<ICommandService>());
+        collection.AddHostedService(sp => sp.GetRequiredService<IExteriorService>());
       }).Build();
 
     _host.StartAsync();
