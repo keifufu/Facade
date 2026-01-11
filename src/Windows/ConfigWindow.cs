@@ -1,15 +1,67 @@
 
+using Dalamud.Utility;
+using Lumina.Extensions;
+
 namespace Facade.Windows;
 
-// HousingExterior.Unknown1 is the type, e.g. 1 for Roof, 2 for Walls, etc.
-
-public partial class ConfigWindow(Configuration _configuration, IExteriorService _exteriorService, IDataManager _dataManager, IDalamudPluginInterface _pluginInterface, ITextureProvider _textureProvider) : Window("Facade##FacadeConfigWindow")
+public class ConfigWindow(Configuration _configuration, IExteriorService _exteriorService, IDataManager _dataManager, IDalamudPluginInterface _pluginInterface, ITextureProvider _textureProvider) : Window("Facade##FacadeConfigWindow")
 {
   private bool _addingFacade = false;
   private Facade? _editingFacade = null;
   private sbyte? _selectedPlot = null;
-  private uint? _selectedExterior = null;
-  private uint? _selectedStain = null;
+  private Int128 _selectedExterior = Facade.Pack(null, null, null, null, null, null, null, null);
+  private Int128 _selectedStain = Facade.Pack(null, null, null, null, null, null, null, null);
+  private bool _unitedExteriorSelection = true;
+
+  private List<ExteriorItem> _cachedExteriorItems = [];
+  private List<ExteriorItem> ExteriorItems
+  {
+    get
+    {
+      if (_cachedExteriorItems.Count > 0) return _cachedExteriorItems;
+      IEnumerable<Item> items = _dataManager.GetExcelSheet<Item>().Where(item => item.AdditionalData.RowId != 0 && item.ItemSearchCategory.RowId == 65);
+      foreach (Item item in items)
+      {
+        if (_dataManager.GetExcelSheet<HousingExterior>().TryGetRow(item.AdditionalData.RowId, out HousingExterior housingExterior))
+        {
+          _cachedExteriorItems.Add(new()
+          {
+            Size = housingExterior.HousingSize == 254 ? null : (PlotSize)housingExterior.HousingSize,
+            Type = (ExteriorItemType)housingExterior.Unknown1 - 1,
+            Id = housingExterior.RowId,
+            Name = item.Name.ToString(),
+            Icon = item.Icon,
+            UnitedExteriorId = null
+          });
+        }
+        else if (_dataManager.GetExcelSheet<HousingUnitedExterior>().TryGetRow(item.AdditionalData.RowId, out HousingUnitedExterior housingUnitedExterior))
+        {
+          Int128 packed = Facade.Pack(
+            housingUnitedExterior.Roof.RowId,
+            housingUnitedExterior.Walls.RowId,
+            housingUnitedExterior.Windows.RowId,
+            housingUnitedExterior.Door.RowId,
+            housingUnitedExterior.OptionalRoof.RowId,
+            housingUnitedExterior.OptionalWall.RowId,
+            housingUnitedExterior.OptionalSignboard.RowId,
+            housingUnitedExterior.Fence.RowId
+          );
+
+          _cachedExteriorItems.Add(new()
+          {
+            Size = (PlotSize)housingUnitedExterior.PlotSize,
+            Type = ExteriorItemType.UnitedExterior,
+            Id = packed,
+            Name = item.Name.ToString(),
+            Icon = item.Icon,
+            UnitedExteriorId = housingUnitedExterior.RowId
+          });
+        }
+      }
+
+      return _cachedExteriorItems;
+    }
+  }
 
   private readonly IFontHandle _uiFont = _pluginInterface.UiBuilder.FontAtlas.NewDelegateFontHandle(e =>
   {
@@ -31,7 +83,12 @@ public partial class ConfigWindow(Configuration _configuration, IExteriorService
 
     Flags = ImGuiWindowFlags.NoResize | ImGuiWindowFlags.NoScrollbar | ImGuiWindowFlags.AlwaysAutoResize;
     SizeCondition = ImGuiCond.Always;
-    Size = new(300, 300);
+
+    SizeConstraints = new()
+    {
+      MinimumSize = new(300),
+      MaximumSize = new(300, (_addingFacade || _editingFacade != null) && !_unitedExteriorSelection ? 999 : 300)
+    };
 
     if (DrawEditScreen()) return;
 
@@ -43,8 +100,9 @@ public partial class ConfigWindow(Configuration _configuration, IExteriorService
         if (!buttonDisabled)
         {
           _selectedPlot = null;
-          _selectedExterior = null;
-          _selectedStain = null;
+          _selectedExterior = Facade.Pack(null, null, null, null, null, null, null, null);
+          _selectedStain = Facade.Pack(null, null, null, null, null, null, null, null);
+          _unitedExteriorSelection = true;
           _addingFacade = true;
         }
       }
@@ -82,14 +140,19 @@ public partial class ConfigWindow(Configuration _configuration, IExteriorService
     ImGui.Text(text);
   }
 
-  private void DrawColorCircle(uint? stain, uint unscaledSize, uint unscaledPaddingTopLeft = 0)
+  private string DrawColorCircle(uint? stain, uint unscaledSize, uint unscaledPaddingTopLeft = 0)
   {
-    uint stainColor = 0x000000FF;
+    string stainName = "Existing Color";
+    uint stainColor = ColorHelpers.RgbaVector4ToUint(ImGui.GetStyle().Colors[(int)ImGuiCol.WindowBg]);
     if (stain != null && _dataManager.GetExcelSheet<Stain>().TryGetRow((uint)stain, out Stain stainRow))
+    {
+      stainName = stainRow.Name.ToString();
       stainColor = ABGRtoARGB(stainRow.Color);
+    }
     Vector2 pos = ImGui.GetCursorScreenPos() + ScaledVector2(unscaledPaddingTopLeft);
     ImGui.GetWindowDrawList().AddRectFilled(pos - ScaledVector2(1), pos + ScaledVector2(unscaledSize + 1), 0xFFFFFFFF, ScaledFloat((unscaledSize + 2) / 2));
     ImGui.GetWindowDrawList().AddRectFilled(pos, pos + ScaledVector2(unscaledSize), stainColor, ScaledFloat(unscaledSize / 2));
+    return stainName;
   }
 
   private void DrawFacadeList()
@@ -120,12 +183,21 @@ public partial class ConfigWindow(Configuration _configuration, IExteriorService
         {
           ImGui.TableNextRow();
           ImGui.TableNextColumn();
-          ISharedImmediateTexture? icon = GetExteriorIcon(facade.Plot, facade.HousingUnitedExterior);
+          ISharedImmediateTexture? icon = GetExteriorIcon(facade.Plot, facade);
           if (icon == null) continue;
           ImGui.Image(icon.GetWrapOrEmpty().Handle, ScaledVector2(40));
 
           ImGui.TableNextColumn();
-          DrawColorCircle(facade.Stain, 28, 6);
+          string stainName = DrawColorCircle(Facade.Unpack(facade.PackedStainIds).u1, 28, 6);
+          ImGui.Dummy(ScaledVector2(40));
+
+          if (ImGui.IsItemHovered())
+          {
+            using (ImRaii.Tooltip())
+            {
+              ImGui.Text(stainName);
+            }
+          }
 
           ImGui.TableNextColumn();
           DrawCenteredText($"Plot {facade.Plot + 1}", true, true);
@@ -134,9 +206,10 @@ public partial class ConfigWindow(Configuration _configuration, IExteriorService
           if (ImGuiComponents.IconButton($"##Edit{facade.Plot}", FontAwesomeIcon.Edit, new(40)))
           {
             _editingFacade = facade;
+            _unitedExteriorSelection = _editingFacade.IsUnitedExterior;
             _selectedPlot = (sbyte)(_editingFacade.Plot + 1);
-            _selectedExterior = _editingFacade.HousingUnitedExterior;
-            _selectedStain = _editingFacade.Stain;
+            _selectedExterior = _editingFacade.PackedExteriorIds;
+            _selectedStain = _editingFacade.PackedStainIds;
           }
         }
       }
@@ -149,16 +222,24 @@ public partial class ConfigWindow(Configuration _configuration, IExteriorService
     {
       using (ImRaii.Tooltip())
       {
-        ImGui.Text("You are only being shown facades from the current division.");
+        ImGui.Text("You are only being shown Facades from the current division.");
       }
     }
   }
 
-  private ISharedImmediateTexture? GetExteriorIcon(sbyte plot, uint? exterior)
+  private ISharedImmediateTexture? GetExteriorIcon(sbyte plot, Facade? facade)
   {
     PlotSize? plotSize = _exteriorService.GetPlotSize(plot);
     uint defaultIconId = 60751 + (uint)(plotSize ?? 0);
-    uint iconId = exterior == null ? defaultIconId : (uint)exterior - 276880;
+    uint individualIconId = 60761 + (uint)(plotSize ?? 0);
+    uint unitedIconId = defaultIconId;
+    if (facade != null)
+    {
+      ExteriorItem? exteriorItem = ExteriorItems.FirstOrNull(item => item.Id == facade.PackedExteriorIds);
+      if (exteriorItem != null && exteriorItem.HasValue && exteriorItem.Value.UnitedExteriorId != null)
+        unitedIconId = (uint)exteriorItem.Value.UnitedExteriorId - 276880;
+    }
+    uint iconId = facade == null ? defaultIconId : facade.IsUnitedExterior ? unitedIconId : individualIconId;
     if (!_textureProvider.TryGetFromGameIcon(new GameIconLookup(iconId), out ISharedImmediateTexture? icon)) return null;
     return icon;
   }
@@ -170,13 +251,23 @@ public partial class ConfigWindow(Configuration _configuration, IExteriorService
     if (_addingFacade) DrawCenteredText("Adding Facade", true, false);
     if (_editingFacade != null) DrawCenteredText($"Editing Facade (Plot {_selectedPlot})", true, false);
 
-    ImGui.Dummy(ScaledVector2(8));
-
     if (_addingFacade) DrawPlotDropdown();
+
+    using (ImRaii.Disabled(_selectedPlot == null))
+    {
+      ImGui.Dummy(ScaledVector2(60, 0));
+      ImGui.SameLine();
+      if (ImGui.RadioButton("United", _unitedExteriorSelection))
+        _unitedExteriorSelection = true;
+      ImGui.SameLine();
+      if (ImGui.RadioButton("Individual", !_unitedExteriorSelection))
+        _unitedExteriorSelection = false;
+    }
+
     DrawExteriorDropdown();
     DrawStainDropdown();
 
-    ImGui.Dummy(ScaledVector2(8));
+    ImGui.Dummy(ScaledVector2(4));
 
     if (_addingFacade)
     {
@@ -190,8 +281,9 @@ public partial class ConfigWindow(Configuration _configuration, IExteriorService
             District = _exteriorService.CurrentDistrict,
             Ward = _exteriorService.CurrentWard,
             Plot = (sbyte)(_selectedPlot! - 1),
-            HousingUnitedExterior = _selectedExterior,
-            Stain = _selectedStain,
+            PackedExteriorIds = _selectedExterior,
+            PackedStainIds = _selectedStain,
+            IsUnitedExterior = _unitedExteriorSelection,
           });
           _configuration.Save();
           _exteriorService.UpdateExteriors();
@@ -212,9 +304,33 @@ public partial class ConfigWindow(Configuration _configuration, IExteriorService
       {
         if (ImGui.Button("Save", new(ImGui.GetContentRegionAvail().X / 2, ScaledFloat(30))))
         {
+          if (_editingFacade.IsUnitedExterior != _unitedExteriorSelection)
+          {
+            {
+              (uint? n1, uint? n2, uint? n3, uint? n4, uint? n5, uint? n6, uint? n7, uint? n8) = Facade.Unpack(_selectedExterior);
+              (uint? o1, uint? o2, uint? o3, uint? o4, uint? o5, uint? o6, uint? o7, uint? o8) = Facade.Unpack(_editingFacade.PackedExteriorIds);
+              if (n1 == o1) n1 = null;
+              if (n2 == o2) n2 = null;
+              if (n3 == o3) n3 = null;
+              if (n4 == o4) n4 = null;
+              if (n5 == o5) n5 = null;
+              if (n6 == o6) n6 = null;
+              if (n7 == o7) n7 = null;
+              if (n8 == o8) n8 = null;
+              _selectedExterior = Facade.Pack(n1, n2, n3, n4, n5, n6, n7, n8);
+            }
+
+            if (_unitedExteriorSelection)
+            {
+              (uint? n1, uint? n2, uint? n3, uint? n4, uint? n5, uint? n6, uint? n7, uint? n8) = Facade.Unpack(_selectedStain);
+              _selectedStain = Facade.Pack(n1, n1, n1, n1, n1, n1, n1, n1);
+            }
+          }
+
           _editingFacade.Plot = (sbyte)(_selectedPlot! - 1);
-          _editingFacade.HousingUnitedExterior = _selectedExterior;
-          _editingFacade.Stain = _selectedStain;
+          _editingFacade.PackedExteriorIds = _selectedExterior;
+          _editingFacade.PackedStainIds = _selectedStain;
+          _editingFacade.IsUnitedExterior = _unitedExteriorSelection;
           _configuration.Save();
           _exteriorService.UpdateExteriors();
           _editingFacade = null;
@@ -234,13 +350,6 @@ public partial class ConfigWindow(Configuration _configuration, IExteriorService
         _exteriorService.UpdateExteriors();
         _editingFacade = null;
       }
-    }
-
-    ImGui.Dummy(ScaledVector2(8));
-
-    using (ImRaii.Disabled())
-    {
-      ImGui.TextWrapped("Exterior selection is currently limited to certain united exteriors, this might change in the future if there is demand for more in-depth customization.");
     }
 
     return true;
@@ -267,32 +376,94 @@ public partial class ConfigWindow(Configuration _configuration, IExteriorService
   private void DrawExteriorDropdown()
   {
     PlotSize? plotSize = _exteriorService.GetPlotSize((sbyte)((_selectedPlot ?? 0) - 1));
-    using (ImRaii.Disabled(_selectedPlot == null || plotSize == null))
+    using (ImRaii.Disabled(_selectedPlot == null))
     {
-      ImGui.SetNextItemWidth(ImGui.GetContentRegionAvail().X);
-      using (ImRaii.IEndObject dropdown = ImRaii.Combo("###ExteriorSelect", _selectedExterior == null ? "Existing exterior" : _selectedExterior.ToString()))
-      {
-        if (!dropdown.Success) return;
+      (uint? roof, uint? walls, uint? windows, uint? door, uint? optionalRoof, uint? optionalWall, uint? optionalSignboard, uint? fence) = Facade.Unpack(_selectedExterior);
 
-        ISharedImmediateTexture? icon2 = GetExteriorIcon((sbyte)((_selectedPlot ?? 0) - 1), null);
-        if (icon2 == null) return;
-        ImGui.Image(icon2.GetWrapOrEmpty().Handle, ScaledVector2(16));
-        ImGui.SameLine();
-        if (ImGui.Selectable("Existing exterior", _selectedExterior == null))
+      void onSelect(string text, uint? exterior, Int128? exteriorId)
+      {
+        if (_unitedExteriorSelection)
         {
-          _selectedExterior = null;
+          if (exteriorId == null) _selectedExterior = Facade.Pack(null, null, null, null, null, null, null, null);
+          else _selectedExterior = (Int128)exteriorId;
+          return;
         }
 
-        foreach (HousingUnitedExterior exterior in _dataManager.GetExcelSheet<HousingUnitedExterior>().Where(e => e.PlotSize == (byte)plotSize!))
+        switch (text)
         {
-          ISharedImmediateTexture? icon = GetExteriorIcon((sbyte)_selectedPlot!, exterior.RowId);
-          if (icon == null) continue;
-          ImGui.Image(icon.GetWrapOrEmpty().Handle, ScaledVector2(16));
-          ImGui.SameLine();
-          if (ImGui.Selectable($"Unknown Name (I was lazy)##{exterior.RowId}", _selectedExterior == exterior.RowId))
-          {
-            _selectedExterior = exterior.RowId;
-          }
+          case "Roof":
+            roof = exterior;
+            break;
+          case "Walls":
+            walls = exterior;
+            break;
+          case "Windows":
+            windows = exterior;
+            break;
+          case "Door":
+            door = exterior;
+            break;
+          case "Roof Decoration":
+            optionalRoof = exterior;
+            break;
+          case "Wall Decoration":
+            optionalWall = exterior;
+            break;
+          case "Signboard":
+            optionalSignboard = exterior;
+            break;
+          case "Fence":
+            fence = exterior;
+            break;
+        }
+
+        _selectedExterior = Facade.Pack(roof, walls, windows, door, optionalRoof, optionalWall, optionalSignboard, fence);
+      }
+
+      if (_unitedExteriorSelection)
+      {
+        DrawSingularExteriorDropdown(plotSize, ExteriorItemType.UnitedExterior, _selectedExterior, "Exterior", onSelect);
+      }
+      else
+      {
+        DrawSingularExteriorDropdown(plotSize, ExteriorItemType.Roof, roof, "Roof", onSelect);
+        DrawSingularExteriorDropdown(plotSize, ExteriorItemType.Walls, walls, "Walls", onSelect);
+        DrawSingularExteriorDropdown(plotSize, ExteriorItemType.Windows, windows, "Windows", onSelect);
+        DrawSingularExteriorDropdown(plotSize, ExteriorItemType.Door, door, "Door", onSelect);
+        DrawSingularExteriorDropdown(plotSize, ExteriorItemType.OptionalRoof, optionalRoof, "Roof Decoration", onSelect);
+        DrawSingularExteriorDropdown(plotSize, ExteriorItemType.OptionalWall, optionalWall, "Wall Decoration", onSelect);
+        DrawSingularExteriorDropdown(plotSize, ExteriorItemType.OptionalSignboard, optionalSignboard, "Signboard", onSelect);
+        DrawSingularExteriorDropdown(plotSize, ExteriorItemType.Fence, fence, "Fence", onSelect);
+      }
+    }
+  }
+
+  private void DrawSingularExteriorDropdown(PlotSize? plotSize, ExteriorItemType type, Int128? exterior, string text, Action<string, uint?, Int128?> onSelect)
+  {
+    ImGui.SetNextItemWidth(ImGui.GetContentRegionAvail().X);
+
+    string selectedExterior = ExteriorItems.Find(item => item.Id == exterior && item.Type == type).Name ?? $"Existing {text}";
+    using (ImRaii.IEndObject dropdown = ImRaii.Combo($"###ExteriorSelect{text}", selectedExterior))
+    {
+      if (!dropdown.Success) return;
+
+      ISharedImmediateTexture? icon2 = GetExteriorIcon((sbyte)((_selectedPlot ?? 0) - 1), null);
+      if (icon2 == null) return;
+      ImGui.Image(icon2.GetWrapOrEmpty().Handle, ScaledVector2(16));
+      ImGui.SameLine();
+      if (ImGui.Selectable($"Existing {text}", exterior == null))
+      {
+        onSelect(text, null, null);
+      }
+
+      foreach (ExteriorItem exteriorItem in ExteriorItems.Where(item => (item.Size == plotSize || item.Size == null) && item.Type == type))
+      {
+        if (!_textureProvider.TryGetFromGameIcon(new GameIconLookup(exteriorItem.Icon), out ISharedImmediateTexture? icon)) continue;
+        ImGui.Image(icon.GetWrapOrEmpty().Handle, ScaledVector2(16));
+        ImGui.SameLine();
+        if (ImGui.Selectable(exteriorItem.Name, exterior == exteriorItem.Id))
+        {
+          onSelect(text, (uint)exteriorItem.Id, exteriorItem.Id);
         }
       }
     }
@@ -302,32 +473,105 @@ public partial class ConfigWindow(Configuration _configuration, IExteriorService
   {
     using (ImRaii.Disabled(_selectedPlot == null))
     {
-      Stain? selectedStain = _dataManager.GetExcelSheet<Stain>().GetRowOrDefault(_selectedStain ?? 0);
-      string selectedStainString = _selectedStain == null || selectedStain == null || !selectedStain.HasValue ? "Existing color" : selectedStain.Value.Name.ToString();
-      ImGui.SetNextItemWidth(ImGui.GetContentRegionAvail().X);
-      using (ImRaii.IEndObject dropdown = ImRaii.Combo("###StainSelect", selectedStainString))
-      {
-        if (!dropdown.Success) return;
+      (uint? roofStain, uint? wallsStain, uint? windowsStain, uint? doorStain, uint? optionalRoofStain, uint? optionalWallStain, uint? optionalSignboardStain, uint? fenceStain) = Facade.Unpack(_selectedStain);
 
-        if (ImGui.Selectable("Existing color", _selectedStain == null))
+      void onSelect(string text, uint? stain)
+      {
+        if (_unitedExteriorSelection)
         {
-          _selectedStain = null;
+          _selectedStain = Facade.Pack(stain, stain, stain, stain, stain, stain, stain, stain);
+          return;
         }
 
-        foreach (Stain stain in _dataManager.GetExcelSheet<Stain>())
+        switch (text)
         {
-          if (stain.RowId == 0 || stain.Name.IsEmpty) continue;
+          case "Roof":
+            roofStain = stain;
+            break;
+          case "Walls":
+            wallsStain = stain;
+            break;
+          case "Windows":
+            windowsStain = stain;
+            break;
+          case "Door":
+            doorStain = stain;
+            break;
+          case "Roof Decoration":
+            optionalRoofStain = stain;
+            break;
+          case "Wall Decoration":
+            optionalWallStain = stain;
+            break;
+          case "Signboard":
+            optionalSignboardStain = stain;
+            break;
+          case "Fence":
+            fenceStain = stain;
+            break;
+        }
 
-          DrawColorCircle(stain.RowId, 16);
-          ImGui.Dummy(ScaledVector2(16));
-          ImGui.SameLine();
+        _selectedStain = Facade.Pack(roofStain, wallsStain, windowsStain, doorStain, optionalRoofStain, optionalWallStain, optionalSignboardStain, fenceStain);
+      }
 
-          if (ImGui.Selectable(stain.Name.ToString(), _selectedStain == stain.RowId))
-          {
-            _selectedStain = stain.RowId;
-          }
+      if (_unitedExteriorSelection)
+      {
+        DrawSingularStainDropdown(roofStain, string.Empty, onSelect);
+      }
+      else
+      {
+        DrawSingularStainDropdown(roofStain, "Roof", onSelect);
+        DrawSingularStainDropdown(wallsStain, "Walls", onSelect);
+        DrawSingularStainDropdown(windowsStain, "Windows", onSelect);
+        DrawSingularStainDropdown(doorStain, "Door", onSelect);
+        DrawSingularStainDropdown(optionalRoofStain, "Roof Decoration", onSelect);
+        DrawSingularStainDropdown(optionalWallStain, "Wall Decoration", onSelect);
+        DrawSingularStainDropdown(optionalSignboardStain, "Signboard", onSelect);
+        DrawSingularStainDropdown(fenceStain, "Fence", onSelect);
+      }
+    }
+  }
+
+  private void DrawSingularStainDropdown(uint? stain, string text, Action<string, uint?> onSelect)
+  {
+    Stain? selectedStain = _dataManager.GetExcelSheet<Stain>().GetRowOrDefault(stain ?? 0);
+    string selectedStainString = stain == null || selectedStain == null || !selectedStain.HasValue ? text.IsNullOrEmpty() ? "Existing Color" : $"Existing {text} Color" : selectedStain.Value.Name.ToString();
+    ImGui.SetNextItemWidth(ImGui.GetContentRegionAvail().X);
+    using (ImRaii.IEndObject dropdown = ImRaii.Combo($"###StainSelect{text}", selectedStainString))
+    {
+      if (!dropdown.Success) return;
+
+      DrawColorCircle(null, 16);
+      ImGui.Dummy(ScaledVector2(16));
+      ImGui.SameLine();
+      if (ImGui.Selectable($"Existing {text} Color", stain == null))
+      {
+        onSelect(text, null);
+      }
+
+      foreach (Stain stainRow in _dataManager.GetExcelSheet<Stain>())
+      {
+        if (stainRow.RowId == 0 || stainRow.Name.IsEmpty) continue;
+
+        DrawColorCircle(stainRow.RowId, 16);
+        ImGui.Dummy(ScaledVector2(16));
+        ImGui.SameLine();
+
+        if (ImGui.Selectable(stainRow.Name.ToString(), stain == stainRow.RowId))
+        {
+          onSelect(text, stainRow.RowId);
         }
       }
     }
   }
+}
+
+public struct ExteriorItem
+{
+  public required PlotSize? Size;
+  public required ExteriorItemType Type;
+  public required Int128 Id;
+  public required string Name;
+  public required ushort Icon;
+  public required uint? UnitedExteriorId;
 }

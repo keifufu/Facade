@@ -13,6 +13,10 @@ public class CommandService(ILogger _logger, ConfigWindow _configWindow, IComman
       HelpMessage = $"See '{FacadeCommand} help' for more."
     });
 
+#if DEBUG
+    _configWindow.IsOpen = true;
+#endif
+
     _logger.ServiceLifecycle();
     return Task.CompletedTask;
   }

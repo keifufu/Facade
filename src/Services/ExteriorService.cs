@@ -14,7 +14,7 @@ public interface IExteriorService : IHostedService
   unsafe void UpdateExteriors(bool reset = false);
 }
 
-public class ExteriorService(ILogger _logger, Configuration _configuration, IFramework _framework, IDataManager _dataManager, IClientState _clientState, IPlayerState _playerState) : IExteriorService
+public class ExteriorService(ILogger _logger, Configuration _configuration, IFramework _framework, IClientState _clientState, IPlayerState _playerState) : IExteriorService
 {
   private readonly Dictionary<int, OutdoorPlotExteriorData> _originalExteriorData = [];
   private bool _wasNotLoaded = false;
@@ -148,57 +148,40 @@ public class ExteriorService(ILogger _logger, Configuration _configuration, IFra
           _originalExteriorData.Add(facade.Plot, exteriorData);
         }
 
-        if (facade.HousingUnitedExterior != null && _dataManager.GetExcelSheet<HousingUnitedExterior>().TryGetRow(facade.HousingUnitedExterior ?? 0, out HousingUnitedExterior exterior))
+        void SetType<T>(Span<T> obj, ExteriorItemType type, uint? value, Func<OutdoorPlotExteriorData, int, T> getValue)
         {
-          exteriorData.HousingExteriorIds[0] = (short)exterior.Roof.RowId;
-          exteriorData.HousingExteriorIds[1] = (short)exterior.Walls.RowId;
-          exteriorData.HousingExteriorIds[2] = (short)exterior.Windows.RowId;
-          exteriorData.HousingExteriorIds[3] = (short)exterior.Door.RowId;
-          exteriorData.HousingExteriorIds[4] = (short)exterior.OptionalRoof.RowId;
-          exteriorData.HousingExteriorIds[5] = (short)exterior.OptionalWall.RowId;
-          exteriorData.HousingExteriorIds[6] = (short)exterior.OptionalSignboard.RowId;
-          exteriorData.HousingExteriorIds[7] = (short)exterior.Fence.RowId;
-        }
-        else
-        {
-          if (_originalExteriorData.TryGetValue(facade.Plot, out OutdoorPlotExteriorData originalExteriorData))
+          if (value != null)
           {
-            exteriorData.HousingExteriorIds[0] = originalExteriorData.HousingExteriorIds[0];
-            exteriorData.HousingExteriorIds[1] = originalExteriorData.HousingExteriorIds[1];
-            exteriorData.HousingExteriorIds[2] = originalExteriorData.HousingExteriorIds[2];
-            exteriorData.HousingExteriorIds[3] = originalExteriorData.HousingExteriorIds[3];
-            exteriorData.HousingExteriorIds[4] = originalExteriorData.HousingExteriorIds[4];
-            exteriorData.HousingExteriorIds[5] = originalExteriorData.HousingExteriorIds[5];
-            exteriorData.HousingExteriorIds[6] = originalExteriorData.HousingExteriorIds[6];
-            exteriorData.HousingExteriorIds[7] = originalExteriorData.HousingExteriorIds[7];
+            if (typeof(T) == typeof(short)) obj[(int)type] = (T)(object)(short)value;
+            else if (typeof(T) == typeof(sbyte)) obj[(int)type] = (T)(object)(sbyte)value;
+          }
+          else if (_originalExteriorData.TryGetValue(facade.Plot, out OutdoorPlotExteriorData originalExteriorData))
+          {
+            obj[(int)type] = getValue(originalExteriorData, (int)type);
           }
         }
 
-        if (facade.Stain != null)
-        {
-          exteriorData.StainIds[0] = (sbyte)facade.Stain;
-          exteriorData.StainIds[1] = (sbyte)facade.Stain;
-          exteriorData.StainIds[2] = (sbyte)facade.Stain;
-          exteriorData.StainIds[3] = (sbyte)facade.Stain;
-          exteriorData.StainIds[4] = (sbyte)facade.Stain;
-          exteriorData.StainIds[5] = (sbyte)facade.Stain;
-          exteriorData.StainIds[6] = (sbyte)facade.Stain;
-          exteriorData.StainIds[7] = (sbyte)facade.Stain;
-        }
-        else
-        {
-          if (_originalExteriorData.TryGetValue(facade.Plot, out OutdoorPlotExteriorData originalExteriorData))
-          {
-            exteriorData.StainIds[0] = originalExteriorData.StainIds[0];
-            exteriorData.StainIds[1] = originalExteriorData.StainIds[1];
-            exteriorData.StainIds[2] = originalExteriorData.StainIds[2];
-            exteriorData.StainIds[3] = originalExteriorData.StainIds[3];
-            exteriorData.StainIds[4] = originalExteriorData.StainIds[4];
-            exteriorData.StainIds[5] = originalExteriorData.StainIds[5];
-            exteriorData.StainIds[6] = originalExteriorData.StainIds[6];
-            exteriorData.StainIds[7] = originalExteriorData.StainIds[7];
-          }
-        }
+        (uint? roof, uint? walls, uint? windows, uint? door, uint? optionalRoof, uint? optionalWall, uint? optionalSignboard, uint? fence) = Facade.Unpack(facade.PackedExteriorIds);
+
+        SetType(exteriorData.HousingExteriorIds, ExteriorItemType.Roof, roof, (data, index) => data.HousingExteriorIds[index]);
+        SetType(exteriorData.HousingExteriorIds, ExteriorItemType.Walls, walls, (data, index) => data.HousingExteriorIds[index]);
+        SetType(exteriorData.HousingExteriorIds, ExteriorItemType.Windows, windows, (data, index) => data.HousingExteriorIds[index]);
+        SetType(exteriorData.HousingExteriorIds, ExteriorItemType.Door, door, (data, index) => data.HousingExteriorIds[index]);
+        SetType(exteriorData.HousingExteriorIds, ExteriorItemType.OptionalRoof, optionalRoof, (data, index) => data.HousingExteriorIds[index]);
+        SetType(exteriorData.HousingExteriorIds, ExteriorItemType.OptionalWall, optionalWall, (data, index) => data.HousingExteriorIds[index]);
+        SetType(exteriorData.HousingExteriorIds, ExteriorItemType.OptionalSignboard, optionalSignboard, (data, index) => data.HousingExteriorIds[index]);
+        SetType(exteriorData.HousingExteriorIds, ExteriorItemType.Fence, fence, (data, index) => data.HousingExteriorIds[index]);
+
+        (uint? roofStain, uint? wallsStain, uint? windowsStain, uint? doorStain, uint? optionalRoofStain, uint? optionalWallStain, uint? optionalSignboardStain, uint? fenceStain) = Facade.Unpack(facade.PackedStainIds);
+
+        SetType(exteriorData.StainIds, ExteriorItemType.Roof, roofStain, (data, index) => data.StainIds[index]);
+        SetType(exteriorData.StainIds, ExteriorItemType.Walls, wallsStain, (data, index) => data.StainIds[index]);
+        SetType(exteriorData.StainIds, ExteriorItemType.Windows, windowsStain, (data, index) => data.StainIds[index]);
+        SetType(exteriorData.StainIds, ExteriorItemType.Door, doorStain, (data, index) => data.StainIds[index]);
+        SetType(exteriorData.StainIds, ExteriorItemType.OptionalRoof, optionalRoofStain, (data, index) => data.StainIds[index]);
+        SetType(exteriorData.StainIds, ExteriorItemType.OptionalWall, optionalWallStain, (data, index) => data.StainIds[index]);
+        SetType(exteriorData.StainIds, ExteriorItemType.OptionalSignboard, optionalSignboardStain, (data, index) => data.StainIds[index]);
+        SetType(exteriorData.StainIds, ExteriorItemType.Fence, fenceStain, (data, index) => data.StainIds[index]);
 
         _layoutWorld->ActiveLayout->SetOutdoorPlotExterior(facade.Plot, &exteriorData);
       }
@@ -216,4 +199,17 @@ public class ExteriorService(ILogger _logger, Configuration _configuration, IFra
       }
     }
   }
+}
+
+public enum ExteriorItemType : ushort
+{
+  Roof = 0,
+  Walls = 1,
+  Windows = 2,
+  Door = 3,
+  OptionalRoof = 4,
+  OptionalWall = 5,
+  OptionalSignboard = 6,
+  Fence = 7,
+  UnitedExterior = 8
 }
