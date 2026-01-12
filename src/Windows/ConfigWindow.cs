@@ -9,6 +9,7 @@ public class ConfigWindow(ILogger _logger, Configuration _configuration, IExteri
   private Int128 _selectedStain = Facade.Pack(null, null, null, null, null, null, null, null);
   private bool _unitedExteriorSelection = true;
   private bool _festivalView = false;
+  public bool FacadeLocationOverlayOpen = false;
 
   // Took the most recent events as the older ones don't have models for newer districts.
   private readonly List<Festival> _festivals = [
@@ -182,6 +183,8 @@ public class ConfigWindow(ILogger _logger, Configuration _configuration, IExteri
       if (_festivalView) DrawFestivalFacadeList();
       else DrawFacadeList();
     }
+
+    DrawFacadeLocationOverlay();
   }
 
   private uint ABGRtoARGB(uint color) => ((color & 0xFF) << 16) | ((color >> 16) & 0xFF) | (color & 0xFF00) | 0xFF000000;
@@ -266,8 +269,12 @@ public class ConfigWindow(ILogger _logger, Configuration _configuration, IExteri
       {
         using (ImRaii.Tooltip())
         {
-          ImGui.Text("You can only change the Festival Facade of the current ward.");
+          ImGui.Text("You can only change the Festival Facade of the current ward.\n(Click to see the location of other Festival Facades.)");
         }
+      }
+      if (ImGui.IsItemClicked(ImGuiMouseButton.Left))
+      {
+        FacadeLocationOverlayOpen = true;
       }
     }
 
@@ -286,7 +293,6 @@ public class ConfigWindow(ILogger _logger, Configuration _configuration, IExteri
 
     if (facades.Count() == 0)
     {
-      ImGui.Dummy(ScaledVector2(8));
       DrawCenteredText("There are no Facades in your current division.", true, false);
     }
     else
@@ -353,7 +359,108 @@ public class ConfigWindow(ILogger _logger, Configuration _configuration, IExteri
     {
       using (ImRaii.Tooltip())
       {
-        ImGui.Text("You are only being shown Facades from the current division.");
+        ImGui.Text("You are only being shown Facades from the current division.\n(Click to see the location of other Facades.)");
+      }
+    }
+    if (ImGui.IsItemClicked(ImGuiMouseButton.Left))
+    {
+      FacadeLocationOverlayOpen = true;
+    }
+  }
+
+  private void DrawFacadeLocationOverlay()
+  {
+    if (!FacadeLocationOverlayOpen) return;
+
+    ImGui.SetCursorPos(new(0, 0));
+
+    Vector2 windowSize = ImGui.GetContentRegionAvail();
+    Vector4 overlayColor = new(0f, 0f, 0f, 0.75f);
+    Vector4 childColor = ImGui.GetStyle().Colors[(int)ImGuiCol.WindowBg];
+
+    using (ImRaii.PushColor(ImGuiCol.ChildBg, overlayColor))
+    {
+      using (ImRaii.IEndObject overlay = ImRaii.Child("##facadeLocationOverlay", windowSize, false))
+      {
+        if (!overlay.Success) return;
+
+        Vector2 childSize = ScaledVector2(230, 230);
+        childSize.Y -= windowSize.Y * 0.04f;
+        Vector2 childPos = (windowSize - childSize) / 2.0f;
+        childPos.Y += windowSize.Y * 0.04f;
+        ImGui.SetCursorPos(new(childPos.X, childPos.Y));
+
+        using (ImRaii.PushColor(ImGuiCol.ChildBg, childColor))
+        {
+          using (ImRaii.IEndObject child = ImRaii.Child("##facadeLocation", childSize, false, ImGuiWindowFlags.AlwaysUseWindowPadding))
+          {
+            if (!child.Success) return;
+
+            using (ImRaii.PushColor(ImGuiCol.TableBorderStrong, ImGui.GetStyle().Colors[(int)ImGuiCol.TextDisabled]))
+            using (ImRaii.PushColor(ImGuiCol.TableBorderLight, ImGui.GetStyle().Colors[(int)ImGuiCol.TextDisabled]))
+            using (ImRaii.IEndObject table = ImRaii.Table(string.Empty, _festivalView ? 3 : 4, ImGuiTableFlags.Borders | ImGuiTableFlags.RowBg))
+            {
+              if (!table) return;
+
+              ImGui.TableSetupColumn("World", ImGuiTableColumnFlags.WidthStretch);
+              ImGui.TableSetupColumn("District", ImGuiTableColumnFlags.WidthStretch);
+              ImGui.TableSetupColumn("Ward", ImGuiTableColumnFlags.WidthFixed, ScaledFloat(30));
+              if (!_festivalView) ImGui.TableSetupColumn("Total", ImGuiTableColumnFlags.WidthFixed, ScaledFloat(30));
+              ImGui.TableHeadersRow();
+
+              if (_festivalView)
+              {
+                IEnumerable<FestivalFacade> festivalFacades = _configuration.FestivalFacades.Where(f => !(f.Ward == _exteriorService.CurrentWard && f.District == _exteriorService.CurrentDistrict && f.Ward == _exteriorService.CurrentWard)).ToList();
+
+                foreach (FestivalFacade festivalFacade in festivalFacades)
+                {
+                  if (!_dataManager.GetExcelSheet<World>().TryGetRow(festivalFacade.World, out World world)) continue;
+
+                  ImGui.TableNextRow();
+                  ImGui.TableNextColumn();
+                  ImGui.Text(world.Name.ToString());
+
+                  ImGui.TableNextColumn();
+                  ImGui.Text(festivalFacade.District.ToString());
+
+                  ImGui.TableNextColumn();
+                  ImGui.Text(festivalFacade.Ward.ToString());
+                }
+              }
+              else
+              {
+                var facades = _configuration.Facades
+                  .Where(f => !(f.Ward == _exteriorService.CurrentWard && f.District == _exteriorService.CurrentDistrict && f.Ward == _exteriorService.CurrentWard))
+                  .GroupBy(f => new { f.World, f.District, f.Ward })
+                  .Select(g => new { Facade = g.First(), Count = g.Count() }).ToList();
+
+                foreach (var group in facades)
+                {
+                  Facade facade = group.Facade;
+                  if (!_dataManager.GetExcelSheet<World>().TryGetRow(facade.World, out World world)) continue;
+
+                  ImGui.TableNextRow();
+                  ImGui.TableNextColumn();
+                  ImGui.Text(world.Name.ToString());
+
+                  ImGui.TableNextColumn();
+                  ImGui.Text(facade.District.ToString());
+
+                  ImGui.TableNextColumn();
+                  ImGui.Text(facade.Ward.ToString());
+
+                  ImGui.TableNextColumn();
+                  ImGui.Text(group.Count.ToString());
+                }
+              }
+            }
+          }
+        }
+      }
+
+      if (ImGui.IsItemClicked())
+      {
+        FacadeLocationOverlayOpen = false;
       }
     }
   }
