@@ -10,18 +10,20 @@ public class ConfigWindow(ILogger _logger, Configuration _configuration, IExteri
   private bool _unitedExteriorSelection = true;
   private bool _festivalView = false;
 
+  // Took the most recent events as the older ones don't have models for newer districts.
   private readonly List<Festival> _festivals = [
     new Festival { Id = ushort.MaxValue, Name = "No override" },
     new Festival { Id = 00, Name = "None" },
-    new Festival { Id = 50, Name = "Heavensturn" },
-    new Festival { Id = 45, Name = "Valentione's Day" },
-    new Festival { Id = 46, Name = "Little Ladies' Day" },
-    new Festival { Id = 47, Name = "Hatching Tide" },
-    new Festival { Id = 48, Name = "Make It Rain" },
-    new Festival { Id = 53, Name = "Moonfire Faire" },
-    new Festival { Id = 54, Name = "The Rising" },
-    new Festival { Id = 42, Name = "All Saint's Wake" },
-    new Festival { Id = 59, Name = "Starlight Celebration" },
+    new Festival { Id = 129, Name = "Heavensturn" },
+    new Festival { Id = 154, Name = "Valentione's Day" },
+    new Festival { Id = 155, Name = "Little Ladies' Day" },
+    new Festival { Id = 156, Name = "Hatching Tide" },
+    new Festival { Id = 161, Name = "Make It Rain" },
+    new Festival { Id = 159, Name = "Moonfire Faire" },
+    new Festival { Id = 151, Name = "The Rising" },
+    new Festival { Id = 164, Name = "All Saint's Wake" },
+    new Festival { Id = 165, Name = "Starlight Celebration" },
+    // Limited to Mist, Goblet, Lavender Beds
     new Festival { Id = 43, Name = "Starlight Celebration (No Snow)" },
   ];
 
@@ -228,6 +230,7 @@ public class ConfigWindow(ILogger _logger, Configuration _configuration, IExteri
         {
           foreach (Festival festival in _festivals)
           {
+            if (festival.Id == 43 && _exteriorService.CurrentDistrict != District.Mist && _exteriorService.CurrentDistrict != District.TheGoblet && _exteriorService.CurrentDistrict != District.LavenderBeds) continue;
             if (ImGui.Selectable(festival.Name, currentFestivalId == festival.Id))
             {
               if (currentFestivalFacade != null && festival.Id == ushort.MaxValue)
