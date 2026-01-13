@@ -35,7 +35,7 @@ public class WindowService(ILogger _logger, ConfigWindow _configWindow, WindowSy
 
   private void ToggleConfigUi()
   {
-    _configWindow.FacadeLocationOverlayOpen = false;
+    _configWindow.OverlayOpen = false;
     _configWindow.Toggle();
   }
 

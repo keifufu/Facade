@@ -32,7 +32,7 @@ public class CommandService(ILogger _logger, ConfigWindow _configWindow, IComman
     string[] args = arguments.Split(" ", StringSplitOptions.RemoveEmptyEntries);
     if (args.Length == 0)
     {
-      _configWindow.FacadeLocationOverlayOpen = false;
+      _configWindow.OverlayOpen = false;
       _configWindow.Toggle();
       return;
     }

@@ -273,5 +273,6 @@ public enum ExteriorItemType : ushort
   OptionalWall = 5,
   OptionalSignboard = 6,
   Fence = 7,
-  UnitedExterior = 8
+  UnitedExterior = 8,
+  UnitedExteriorPreset = 9
 }
