@@ -13,6 +13,10 @@ public class WindowService(ILogger _logger, ConfigWindow _configWindow, WindowSy
     _pluginInterface.UiBuilder.OpenConfigUi += ToggleConfigUi;
     _pluginInterface.UiBuilder.OpenMainUi += ToggleConfigUi;
 
+#if DEBUG
+    _configWindow.IsOpen = true;
+#endif
+
     _logger.ServiceLifecycle();
     return Task.CompletedTask;
   }

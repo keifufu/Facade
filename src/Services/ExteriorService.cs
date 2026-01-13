@@ -141,7 +141,7 @@ public class ExteriorService(ILogger _logger, Configuration _configuration, IFra
       return;
     }
 
-    uint* festivalArray = stackalloc uint[] { 0, 0, 0, 0, 0, 0, 0, 0 };
+    ushort* festivalArray = stackalloc ushort[] { 0, 0, 0, 0, 0, 0, 0, 0 };
     for (int i = 0; i < 8; i++)
     {
       festivalArray[i] = festivalIds[i];
@@ -210,7 +210,7 @@ public class ExteriorService(ILogger _logger, Configuration _configuration, IFra
           _originalExteriorData.Add(facade.Plot, exteriorData);
         }
 
-        void SetType<T>(Span<T> obj, ExteriorItemType type, uint? value, Func<OutdoorPlotExteriorData, int, T> getValue)
+        void SetType<T>(Span<T> obj, ExteriorItemType type, ushort? value, Func<OutdoorPlotExteriorData, int, T> getValue)
         {
           if (value != null)
           {
@@ -223,7 +223,7 @@ public class ExteriorService(ILogger _logger, Configuration _configuration, IFra
           }
         }
 
-        (uint? roof, uint? walls, uint? windows, uint? door, uint? optionalRoof, uint? optionalWall, uint? optionalSignboard, uint? fence) = Facade.Unpack(facade.PackedExteriorIds);
+        (ushort? roof, ushort? walls, ushort? windows, ushort? door, ushort? optionalRoof, ushort? optionalWall, ushort? optionalSignboard, ushort? fence) = facade.PackedExteriorIds.Unpack();
 
         SetType(exteriorData.HousingExteriorIds, ExteriorItemType.Roof, roof, (data, index) => data.HousingExteriorIds[index]);
         SetType(exteriorData.HousingExteriorIds, ExteriorItemType.Walls, walls, (data, index) => data.HousingExteriorIds[index]);
@@ -234,7 +234,7 @@ public class ExteriorService(ILogger _logger, Configuration _configuration, IFra
         SetType(exteriorData.HousingExteriorIds, ExteriorItemType.OptionalSignboard, optionalSignboard, (data, index) => data.HousingExteriorIds[index]);
         SetType(exteriorData.HousingExteriorIds, ExteriorItemType.Fence, fence, (data, index) => data.HousingExteriorIds[index]);
 
-        (uint? roofStain, uint? wallsStain, uint? windowsStain, uint? doorStain, uint? optionalRoofStain, uint? optionalWallStain, uint? optionalSignboardStain, uint? fenceStain) = Facade.Unpack(facade.PackedStainIds);
+        (ushort? roofStain, ushort? wallsStain, ushort? windowsStain, ushort? doorStain, ushort? optionalRoofStain, ushort? optionalWallStain, ushort? optionalSignboardStain, ushort? fenceStain) = facade.PackedStainIds.Unpack();
 
         SetType(exteriorData.StainIds, ExteriorItemType.Roof, roofStain, (data, index) => data.StainIds[index]);
         SetType(exteriorData.StainIds, ExteriorItemType.Walls, wallsStain, (data, index) => data.StainIds[index]);
