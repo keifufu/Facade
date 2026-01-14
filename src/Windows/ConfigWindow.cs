@@ -1,17 +1,4 @@
-using System.Globalization;
-using System.IO.Compression;
-using Newtonsoft.Json;
-
 namespace Facade.Windows;
-
-public enum OverlayContent
-{
-  FacadeLocations,
-  LoadPreset,
-  SavePreset,
-  SaveNewPreset,
-  FacadeImport,
-}
 
 public class ConfigWindow(ILogger _logger, Configuration _configuration, IExteriorService _exteriorService, IDataManager _dataManager, IDalamudPluginInterface _pluginInterface, ITextureProvider _textureProvider) : Window("Facade##FacadeConfigWindow"), IHostedService
 {
@@ -1208,4 +1195,13 @@ public struct Festival
 {
   public required ushort Id { get; set; }
   public required string Name { get; set; }
+}
+
+public enum OverlayContent
+{
+  FacadeLocations,
+  LoadPreset,
+  SavePreset,
+  SaveNewPreset,
+  FacadeImport,
 }
