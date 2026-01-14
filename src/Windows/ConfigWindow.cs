@@ -1,4 +1,6 @@
 using System.Globalization;
+using System.IO.Compression;
+using Newtonsoft.Json;
 
 namespace Facade.Windows;
 
@@ -8,6 +10,7 @@ public enum OverlayContent
   LoadPreset,
   SavePreset,
   SaveNewPreset,
+  FacadeImport,
 }
 
 public class ConfigWindow(ILogger _logger, Configuration _configuration, IExteriorService _exteriorService, IDataManager _dataManager, IDalamudPluginInterface _pluginInterface, ITextureProvider _textureProvider) : Window("Facade##FacadeConfigWindow"), IHostedService
@@ -21,6 +24,12 @@ public class ConfigWindow(ILogger _logger, Configuration _configuration, IExteri
   private bool _festivalView = false;
   private OverlayContent _overlayContent = OverlayContent.FacadeLocations;
   private string _presetName = "";
+  private bool _isShiftDown => ImGui.IsKeyDown(ImGuiKey.ModShift);
+  private bool _isCtrlDown => ImGui.IsKeyDown(ImGuiKey.ModCtrl);
+  private DateTime _lastExport = new();
+  private DateTime _lastFailedImport = new();
+  private DateTime _lastImport = new();
+  private List<Facade> _importingFacades = [];
 
   public bool OverlayOpen = false;
 
@@ -166,6 +175,38 @@ public class ConfigWindow(ILogger _logger, Configuration _configuration, IExteri
   private float ScaledFloat(float value) => value * ImGuiHelpers.GlobalScale;
   private Vector2 ScaledVector2(float x, float? y = null) => new Vector2(x, y ?? x) * ImGuiHelpers.GlobalScale;
 
+  private string SerializeToBase64(object obj)
+  {
+    string json = JsonConvert.SerializeObject(obj);
+    byte[] bytes = Encoding.UTF8.GetBytes(json);
+    using MemoryStream compressedStream = new();
+    using (GZipStream zipStream = new(compressedStream, CompressionMode.Compress))
+      zipStream.Write(bytes, 0, bytes.Length);
+    return Convert.ToBase64String(compressedStream.ToArray());
+  }
+
+  private T? DeserializeFromBase64<T>(string base64)
+  {
+    try
+    {
+      byte[] bytes = Convert.FromBase64String(base64);
+      using MemoryStream compressedStream = new(bytes);
+      using GZipStream zipStream = new(compressedStream, CompressionMode.Decompress);
+      using MemoryStream resultStream = new();
+      zipStream.CopyTo(resultStream);
+      bytes = resultStream.ToArray();
+      string json = Encoding.UTF8.GetString(bytes);
+      T? deserializedObject = JsonConvert.DeserializeObject<T>(json);
+      if (deserializedObject is T typedObject)
+      {
+        return typedObject;
+      }
+    }
+    catch { }
+
+    return default;
+  }
+
   public override void Draw()
   {
     SizeConstraints = new()
@@ -182,15 +223,15 @@ public class ConfigWindow(ILogger _logger, Configuration _configuration, IExteri
     }
 
     bool buttonsDisabled = _exteriorService.CurrentDivision == 0;
-    bool addButtonDisabled = buttonsDisabled || _festivalView;
-    bool addButtonHovered = false;
+    bool buttonsDisabledFestivalView = buttonsDisabled || _festivalView;
+    bool buttonsHovered = false;
     using (ImRaii.PushStyle(ImGuiStyleVar.Alpha, ImGui.GetStyle().Alpha * 0.5f, buttonsDisabled))
     {
-      using (ImRaii.PushStyle(ImGuiStyleVar.Alpha, ImGui.GetStyle().Alpha * 0.5f, addButtonDisabled))
+      using (ImRaii.PushStyle(ImGuiStyleVar.Alpha, ImGui.GetStyle().Alpha * 0.5f, buttonsDisabledFestivalView))
       {
-        if (ImGui.Button("Add Facade", new(ImGui.GetContentRegionAvail().X - ScaledFloat(44), ScaledFloat(35))))
+        if (ImGui.Button("Add Facade", new(ImGui.GetContentRegionAvail().X - ScaledFloat(35 * 2) - (ImGui.GetStyle().ItemSpacing.X * 2), ScaledFloat(35))))
         {
-          if (!buttonsDisabled && !addButtonDisabled)
+          if (!buttonsDisabled && !buttonsDisabledFestivalView)
           {
             _selectedPlot = null;
             _packedSelectedExterior = UInt128Extensions.Pack(null, null, null, null, null, null, null, null);
@@ -199,16 +240,57 @@ public class ConfigWindow(ILogger _logger, Configuration _configuration, IExteri
             _addingFacade = true;
           }
         }
-        addButtonHovered = ImGui.IsItemHovered();
+        if (!buttonsHovered) buttonsHovered = ImGui.IsItemHovered();
+
+        ImGui.SameLine();
+        bool failedImport = (DateTime.Now - _lastFailedImport).TotalSeconds <= 3;
+        bool successfulImport = (DateTime.Now - _lastImport).TotalSeconds <= 3;
+        bool successfulExport = (DateTime.Now - _lastExport).TotalSeconds <= 3;
+        if (ImGuiComponents.IconButton("##ImportExportButton", failedImport ? FontAwesomeIcon.Times : successfulExport || successfulImport ? FontAwesomeIcon.Check : _isShiftDown ? FontAwesomeIcon.FileExport : FontAwesomeIcon.FileImport, new(35)))
+        {
+          if (!buttonsDisabled && !buttonsDisabledFestivalView && !failedImport && !successfulImport && !successfulExport)
+          {
+            if (_isShiftDown)
+            {
+              ImGui.SetClipboardText(SerializeToBase64(_exteriorService.GetCurrentFacades()));
+              _lastExport = DateTime.Now;
+            }
+            else
+            {
+              List<Facade>? facades = DeserializeFromBase64<List<Facade>>(ImGui.GetClipboardText());
+              if (facades == null || facades.Count == 0)
+              {
+                _lastFailedImport = DateTime.Now;
+              }
+              else
+              {
+                _importingFacades = facades;
+                _overlayContent = OverlayContent.FacadeImport;
+                OverlayOpen = true;
+              }
+            }
+          }
+        }
+        if (!buttonsHovered) buttonsHovered = ImGui.IsItemHovered();
+
+        if (ImGui.IsItemHovered() && !buttonsDisabled && !buttonsDisabledFestivalView)
+        {
+          using (ImRaii.Tooltip())
+          {
+            ImGui.Text(failedImport ? "No valid data found in Clipboard" : successfulImport ? $"Imported {_importingFacades.Count} Facades!" : successfulExport ? "Copied to Clipboard!" : _isShiftDown ? "Export Facades from this division to Clipboard" : "Import Facades from Clipboard\n(Hold SHIFT to export)");
+          }
+        }
       }
+
       ImGui.SameLine();
-      if (ImGuiComponents.IconButton($"##SwitchButton", _festivalView ? FontAwesomeIcon.Snowflake : FontAwesomeIcon.HouseChimney, new(35)))
+      if (ImGuiComponents.IconButton("##SwitchButton", _festivalView ? FontAwesomeIcon.Snowflake : FontAwesomeIcon.HouseChimney, new(35)))
       {
         if (!buttonsDisabled)
         {
           _festivalView = !_festivalView;
         }
       }
+      if (!buttonsHovered) buttonsHovered = ImGui.IsItemHovered();
 
       if (ImGui.IsItemHovered() && !buttonsDisabled)
       {
@@ -221,11 +303,11 @@ public class ConfigWindow(ILogger _logger, Configuration _configuration, IExteri
 
     if (buttonsDisabled)
     {
-      if (addButtonHovered || ImGui.IsItemHovered())
+      if (buttonsHovered || ImGui.IsItemHovered())
       {
         using (ImRaii.Tooltip())
         {
-          ImGui.Text("Visit the ward you want to modify an exterior in first.");
+          ImGui.Text("Visit the division you want to modify an exterior in first.");
         }
       }
     }
@@ -391,7 +473,8 @@ public class ConfigWindow(ILogger _logger, Configuration _configuration, IExteri
           }
 
           ImGui.TableNextColumn();
-          DrawCenteredText($"Plot {facade.Plot + 1}", true, true);
+          PlotSize? plotSize = _exteriorService.GetPlotSize(facade.Plot);
+          DrawCenteredText($"Plot {facade.Plot + 1} ({plotSize?.ToString()[0]})", true, true);
 
           ImGui.TableNextColumn();
           if (ImGuiComponents.IconButton($"##Edit{facade.Plot}", FontAwesomeIcon.Edit, new(40)))
@@ -439,7 +522,7 @@ public class ConfigWindow(ILogger _logger, Configuration _configuration, IExteri
       {
         if (!overlay.Success) return;
 
-        Vector2 childSize = ScaledVector2(230, _overlayContent == OverlayContent.FacadeLocations ? 230 : _overlayContent == OverlayContent.SaveNewPreset ? 90 : 400);
+        Vector2 childSize = ScaledVector2(230, _overlayContent == OverlayContent.FacadeLocations ? 230 : _overlayContent == OverlayContent.FacadeImport ? 130 : _overlayContent == OverlayContent.SaveNewPreset ? 90 : 400);
         childSize.Y -= windowSize.Y * 0.04f;
         Vector2 childPos = (windowSize - childSize) / 2.0f;
         childPos.Y += windowSize.Y * 0.04f;
@@ -451,6 +534,7 @@ public class ConfigWindow(ILogger _logger, Configuration _configuration, IExteri
           {
             if (!child.Success) return;
             if (_overlayContent == OverlayContent.FacadeLocations) DrawFacadeLocations();
+            if (_overlayContent == OverlayContent.FacadeImport) DrawFacadeImport();
             else DrawPresets();
           }
         }
@@ -460,6 +544,42 @@ public class ConfigWindow(ILogger _logger, Configuration _configuration, IExteri
       {
         OverlayOpen = false;
       }
+    }
+  }
+
+  private void DrawFacadeImport()
+  {
+    if (_importingFacades.Count == 0) return;
+    Facade probedFacade = _importingFacades[0];
+    if (!_dataManager.GetExcelSheet<World>().TryGetRow(probedFacade.World, out World world)) return;
+
+    int division = probedFacade.Plot > 30 ? 2 : 1;
+    ImGui.Text("Importing Facades for:");
+    ImGui.Text($"({world.Name} - {probedFacade.District} - Ward {probedFacade.Ward} - Division {division})");
+    ImGui.TextWrapped("This might override some of your Facades in that division.");
+
+    if (ImGui.Button("Confirm", new(ImGui.GetContentRegionAvail().X / 2, ScaledFloat(30))))
+    {
+      foreach (Facade facade in _importingFacades)
+      {
+        Facade? existingFacade = _configuration.Facades.Find(f => f.World == facade.World && f.District == facade.District && f.Ward == facade.Ward && f.Plot == facade.Plot);
+        if (existingFacade != null)
+        {
+          _configuration.Facades.Remove(existingFacade);
+        }
+
+        _configuration.Facades.Add(facade);
+      }
+      _configuration.Save();
+      _exteriorService.UpdateExteriors();
+      _lastImport = DateTime.Now;
+      OverlayOpen = false;
+    }
+
+    ImGui.SameLine();
+    if (ImGui.Button("Cancel", new(ImGui.GetContentRegionAvail().X, ScaledFloat(30))))
+    {
+      OverlayOpen = false;
     }
   }
 
@@ -501,15 +621,49 @@ public class ConfigWindow(ILogger _logger, Configuration _configuration, IExteri
       return;
     }
 
-    if (_overlayContent == OverlayContent.SavePreset)
+    using (ImRaii.Disabled(_overlayContent != OverlayContent.SavePreset))
     {
-      if (ImGui.Button("New Preset", new(ImGui.GetContentRegionAvail().X, ScaledFloat(30))))
+      if (ImGui.Button("New Preset", new(ImGui.GetContentRegionAvail().X - ScaledFloat(30) - ImGui.GetStyle().ItemSpacing.X, ScaledFloat(30))))
       {
         _presetName = "";
         _overlayContent = OverlayContent.SaveNewPreset;
       }
-      ImGui.Dummy(ScaledVector2(2));
     }
+
+    ImGui.SameLine();
+    bool failedImport = (DateTime.Now - _lastFailedImport).TotalSeconds <= 3;
+    bool successfulImport = (DateTime.Now - _lastImport).TotalSeconds <= 3;
+    if (ImGuiComponents.IconButton("##importPresetButton", failedImport ? FontAwesomeIcon.Times : successfulImport ? FontAwesomeIcon.Check : FontAwesomeIcon.FileImport, new(30)))
+    {
+      if (!failedImport && !successfulImport)
+      {
+        Preset? preset = DeserializeFromBase64<Preset>(ImGui.GetClipboardText());
+        if (preset == null)
+        {
+          _lastFailedImport = DateTime.Now;
+        }
+        else
+        {
+          if (_configuration.Presets.Find(p => p.Name == preset.Name) != null)
+          {
+            preset.Name = $"{preset.Name} (2)";
+          }
+          _configuration.Presets.Add(preset);
+          _configuration.Save();
+          _lastImport = DateTime.Now;
+        }
+      }
+    }
+
+    if (ImGui.IsItemHovered())
+    {
+      using (ImRaii.Tooltip())
+      {
+        ImGui.Text(failedImport ? "No valid data found in Clipboard" : successfulImport ? "Imported Preset!" : "Import Preset");
+      }
+    }
+
+    ImGui.Dummy(ScaledVector2(2));
 
     if (_configuration.Presets.Count == 0)
     {
@@ -517,7 +671,8 @@ public class ConfigWindow(ILogger _logger, Configuration _configuration, IExteri
       return;
     }
 
-    bool deleting = ImGui.IsKeyDown(ImGuiKey.ModShift);
+    bool exporting = _isShiftDown;
+    bool deleting = _isCtrlDown;
 
     using (ImRaii.PushColor(ImGuiCol.TableBorderStrong, ImGui.GetStyle().Colors[(int)ImGuiCol.TextDisabled]))
     using (ImRaii.PushColor(ImGuiCol.TableBorderLight, ImGui.GetStyle().Colors[(int)ImGuiCol.TextDisabled]))
@@ -530,34 +685,51 @@ public class ConfigWindow(ILogger _logger, Configuration _configuration, IExteri
 
       foreach (Preset preset in _configuration.Presets)
       {
-        using (ImRaii.Disabled(plotSize != preset.PlotSize && !deleting))
+        using (ImRaii.Disabled(plotSize != preset.PlotSize && !deleting && !exporting))
         {
           ImGui.TableNextRow();
           ImGui.TableNextColumn();
-          DrawCenteredText($"({preset.PlotSize}) {preset.Name}", true, true);
+          DrawCenteredText($"({preset.PlotSize.ToString()[0]}) {preset.Name}", true, true);
 
           ImGui.TableNextColumn();
-          FontAwesomeIcon icon = deleting ? FontAwesomeIcon.Trash : _overlayContent == OverlayContent.SavePreset ? FontAwesomeIcon.Save : FontAwesomeIcon.Check;
+          bool successfulExport = (DateTime.Now - _lastExport).TotalSeconds <= 3;
+          FontAwesomeIcon icon = successfulExport ? FontAwesomeIcon.Check : exporting ? FontAwesomeIcon.FileExport : deleting ? FontAwesomeIcon.Trash : _overlayContent == OverlayContent.SavePreset ? FontAwesomeIcon.Save : FontAwesomeIcon.Check;
           if (ImGuiComponents.IconButton($"##Action{preset.Name}", icon, new(40)))
           {
-            if (deleting)
+            if (!successfulExport)
             {
-              _configuration.Presets.Remove(preset);
-              _configuration.Save();
-              return;
+              if (deleting)
+              {
+                _configuration.Presets.Remove(preset);
+                _configuration.Save();
+                return;
+              }
+              else if (exporting)
+              {
+                ImGui.SetClipboardText(SerializeToBase64(preset));
+                _lastExport = DateTime.Now;
+              }
+              else if (_overlayContent == OverlayContent.SavePreset)
+              {
+                preset.PackedExteriorIds = _packedSelectedExterior;
+                preset.PackedStainIds = _packedSelectedStain;
+                _configuration.Save();
+                OverlayOpen = false;
+              }
+              else if (_overlayContent == OverlayContent.LoadPreset)
+              {
+                _packedSelectedExterior = preset.PackedExteriorIds;
+                _packedSelectedStain = preset.PackedStainIds;
+                OverlayOpen = false;
+              }
             }
-            else if (_overlayContent == OverlayContent.SavePreset)
+          }
+
+          if (ImGui.IsItemHovered())
+          {
+            using (ImRaii.Tooltip())
             {
-              preset.PackedExteriorIds = _packedSelectedExterior;
-              preset.PackedStainIds = _packedSelectedStain;
-              _configuration.Save();
-              OverlayOpen = false;
-            }
-            else if (_overlayContent == OverlayContent.LoadPreset)
-            {
-              _packedSelectedExterior = preset.PackedExteriorIds;
-              _packedSelectedStain = preset.PackedStainIds;
-              OverlayOpen = false;
+              ImGui.Text(successfulExport ? "Copied to Clipboard!" : exporting ? "Export Preset to Clipboard" : deleting ? "Delete Preset" : _overlayContent == OverlayContent.SavePreset ? "Overwrite this Preset" : "Load this Preset");
             }
           }
         }
@@ -570,7 +742,7 @@ public class ConfigWindow(ILogger _logger, Configuration _configuration, IExteri
     {
       using (ImRaii.Tooltip())
       {
-        ImGui.Text("You can only load presets for the correct plot size.\nYou can delete presets if you hold SHIFT.");
+        ImGui.Text("You can only load presets for the correct plot size.\nYou can export presets if you hold SHIFT.\nYou can delete presets if you hold CTRL.");
       }
     }
   }
