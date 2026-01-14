@@ -509,7 +509,7 @@ public class ConfigWindow(ILogger _logger, Configuration _configuration, IExteri
       {
         if (!overlay.Success) return;
 
-        Vector2 childSize = ScaledVector2(230, _overlayContent == OverlayContent.FacadeLocations ? 230 : _overlayContent == OverlayContent.FacadeImport ? 130 : _overlayContent == OverlayContent.SaveNewPreset ? 90 : 400);
+        Vector2 childSize = ScaledVector2(230, _overlayContent == OverlayContent.FacadeLocations ? 230 : _overlayContent == OverlayContent.FacadeImport ? 140 : _overlayContent == OverlayContent.SaveNewPreset ? 90 : 400);
         childSize.Y -= windowSize.Y * 0.04f;
         Vector2 childPos = (windowSize - childSize) / 2.0f;
         childPos.Y += windowSize.Y * 0.04f;
