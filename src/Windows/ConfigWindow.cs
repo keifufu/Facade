@@ -214,7 +214,7 @@ public class ConfigWindow(ILogger _logger, Configuration _configuration, IExteri
     bool buttonsHovered = false;
     using (ImRaii.PushStyle(ImGuiStyleVar.Alpha, ImGui.GetStyle().Alpha * 0.5f, buttonsDisabled))
     {
-      using (ImRaii.PushStyle(ImGuiStyleVar.Alpha, ImGui.GetStyle().Alpha * 0.5f, buttonsDisabledFestivalView))
+      using (ImRaii.PushStyle(ImGuiStyleVar.Alpha, ImGui.GetStyle().Alpha * (buttonsDisabled ? 1 : 0.5f), buttonsDisabledFestivalView))
       {
         if (ImGui.Button("Add Facade", new(ImGui.GetContentRegionAvail().X - ScaledFloat(35 * 2) - (ImGui.GetStyle().ItemSpacing.X * 2), ScaledFloat(35))))
         {
@@ -521,7 +521,7 @@ public class ConfigWindow(ILogger _logger, Configuration _configuration, IExteri
           {
             if (!child.Success) return;
             if (_overlayContent == OverlayContent.FacadeLocations) DrawFacadeLocations();
-            if (_overlayContent == OverlayContent.FacadeImport) DrawFacadeImport();
+            else if (_overlayContent == OverlayContent.FacadeImport) DrawFacadeImport();
             else DrawPresets();
           }
         }
