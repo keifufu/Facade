@@ -866,30 +866,41 @@ public class ConfigWindow(ILogger _logger, Configuration _configuration, IExteri
       ImGui.Dummy(ScaledVector2(4));
     }
 
-    DrawExteriorDropdown();
+    bool invalidSelection = DrawExteriorDropdown();
     DrawStainDropdown();
 
     ImGui.Dummy(ScaledVector2(4));
 
     if (_addingFacade)
     {
-      using (ImRaii.Disabled(_selectedPlot == null))
+      using (ImRaii.PushStyle(ImGuiStyleVar.Alpha, ImGui.GetStyle().Alpha * 0.5f, _selectedPlot == null || invalidSelection))
       {
         if (ImGui.Button("Confirm", new(ImGui.GetContentRegionAvail().X / 2, ScaledFloat(30))))
         {
-          _configuration.Facades.Add(new Facade
+          if (_selectedPlot != null && !invalidSelection)
           {
-            World = _exteriorService.CurrentWorld,
-            District = _exteriorService.CurrentDistrict,
-            Ward = _exteriorService.CurrentWard,
-            Plot = (sbyte)(_selectedPlot! - 1),
-            PackedExteriorIds = _packedSelectedExterior,
-            PackedStainIds = _packedSelectedStain,
-            IsUnitedExterior = _unitedExteriorSelection,
-          });
-          _configuration.Save();
-          _exteriorService.UpdateExteriors();
-          _addingFacade = false;
+            _configuration.Facades.Add(new Facade
+            {
+              World = _exteriorService.CurrentWorld,
+              District = _exteriorService.CurrentDistrict,
+              Ward = _exteriorService.CurrentWard,
+              Plot = (sbyte)(_selectedPlot! - 1),
+              PackedExteriorIds = _packedSelectedExterior,
+              PackedStainIds = _packedSelectedStain,
+              IsUnitedExterior = _unitedExteriorSelection,
+            });
+            _configuration.Save();
+            _exteriorService.UpdateExteriors();
+            _addingFacade = false;
+          }
+        }
+      }
+
+      if (ImGui.IsItemHovered() && invalidSelection)
+      {
+        using (ImRaii.Tooltip())
+        {
+          ImGui.Text("Select all exterior options first");
         }
       }
 
@@ -902,43 +913,44 @@ public class ConfigWindow(ILogger _logger, Configuration _configuration, IExteri
 
     if (_editingFacade != null)
     {
-      using (ImRaii.Disabled(_selectedPlot == null))
+      using (ImRaii.PushStyle(ImGuiStyleVar.Alpha, ImGui.GetStyle().Alpha * 0.5f, _selectedPlot == null || invalidSelection))
       {
         if (ImGui.Button("Save", new(ImGui.GetContentRegionAvail().X / 2, ScaledFloat(30))))
         {
-          if (ExteriorItems.Find(item => item.Id == _editingFacade.PackedExteriorIds).Type != ExteriorItemType.UnitedExteriorPreset)
+          if (_selectedPlot != null && !invalidSelection)
           {
-            if (_editingFacade.IsUnitedExterior != _unitedExteriorSelection)
+            // If switching from Individual to United, Make sure "Existing Exterior" option is saved if nothing was manually selected.
+            if (_unitedExteriorSelection && _editingFacade.IsUnitedExterior != _unitedExteriorSelection)
             {
+              if (ExteriorItems.Where(item => item.Id == _packedSelectedExterior).Count() == 0)
               {
-                (ushort? n1, ushort? n2, ushort? n3, ushort? n4, ushort? n5, ushort? n6, ushort? n7, ushort? n8) = _packedSelectedExterior.Unpack();
-                (ushort? o1, ushort? o2, ushort? o3, ushort? o4, ushort? o5, ushort? o6, ushort? o7, ushort? o8) = _editingFacade.PackedExteriorIds.Unpack();
-                if (n1 == o1) n1 = null;
-                if (n2 == o2) n2 = null;
-                if (n3 == o3) n3 = null;
-                if (n4 == o4) n4 = null;
-                if (n5 == o5) n5 = null;
-                if (n6 == o6) n6 = null;
-                if (n7 == o7) n7 = null;
-                if (n8 == o8) n8 = null;
-                _packedSelectedExterior = UInt128Extensions.Pack(n1, n2, n3, n4, n5, n6, n7, n8);
+                _packedSelectedExterior = UInt128Extensions.Pack(null, null, null, null, null, null, null, null);
               }
             }
 
+            // If a United Facade, save stains in all slots since we technically only selected the roof stain.
             if (_unitedExteriorSelection)
             {
               (ushort? n1, ushort? n2, ushort? n3, ushort? n4, ushort? n5, ushort? n6, ushort? n7, ushort? n8) = _packedSelectedStain.Unpack();
               _packedSelectedStain = UInt128Extensions.Pack(n1, n1, n1, n1, n1, n1, n1, n1);
             }
-          }
 
-          _editingFacade.Plot = (sbyte)(_selectedPlot! - 1);
-          _editingFacade.PackedExteriorIds = _packedSelectedExterior;
-          _editingFacade.PackedStainIds = _packedSelectedStain;
-          _editingFacade.IsUnitedExterior = _unitedExteriorSelection;
-          _configuration.Save();
-          _exteriorService.UpdateExteriors();
-          _editingFacade = null;
+            _editingFacade.Plot = (sbyte)(_selectedPlot! - 1);
+            _editingFacade.PackedExteriorIds = _packedSelectedExterior;
+            _editingFacade.PackedStainIds = _packedSelectedStain;
+            _editingFacade.IsUnitedExterior = _unitedExteriorSelection;
+            _configuration.Save();
+            _exteriorService.UpdateExteriors();
+            _editingFacade = null;
+          }
+        }
+      }
+
+      if (ImGui.IsItemHovered() && invalidSelection)
+      {
+        using (ImRaii.Tooltip())
+        {
+          ImGui.Text("Select all exterior options first");
         }
       }
 
@@ -978,8 +990,9 @@ public class ConfigWindow(ILogger _logger, Configuration _configuration, IExteri
     }
   }
 
-  private void DrawExteriorDropdown()
+  private bool DrawExteriorDropdown()
   {
+    bool invalidSelection = false;
     PlotSize? plotSize = _exteriorService.GetPlotSize((sbyte)((_selectedPlot ?? 0) - 1));
     using (ImRaii.Disabled(_selectedPlot == null))
     {
@@ -1031,41 +1044,46 @@ public class ConfigWindow(ILogger _logger, Configuration _configuration, IExteri
       }
       else
       {
-        DrawSingularExteriorDropdown(plotSize, [ExteriorItemType.Roof], roof, "Roof", onSelect);
-        DrawSingularExteriorDropdown(plotSize, [ExteriorItemType.Walls], walls, "Walls", onSelect);
-        DrawSingularExteriorDropdown(plotSize, [ExteriorItemType.Windows], windows, "Windows", onSelect);
-        DrawSingularExteriorDropdown(plotSize, [ExteriorItemType.Door], door, "Door", onSelect);
-        DrawSingularExteriorDropdown(plotSize, [ExteriorItemType.OptionalRoof], optionalRoof, "Roof Decoration", onSelect, true);
-        DrawSingularExteriorDropdown(plotSize, [ExteriorItemType.OptionalWall], optionalWall, "Wall Decoration", onSelect, true);
-        DrawSingularExteriorDropdown(plotSize, [ExteriorItemType.OptionalSignboard], optionalSignboard, "Signboard", onSelect, true);
-        DrawSingularExteriorDropdown(plotSize, [ExteriorItemType.Fence], fence, "Fence", onSelect, true);
+        if (DrawSingularExteriorDropdown(plotSize, [ExteriorItemType.Roof], roof, "Roof", onSelect)) invalidSelection = true;
+        if (DrawSingularExteriorDropdown(plotSize, [ExteriorItemType.Walls], walls, "Walls", onSelect)) invalidSelection = true;
+        if (DrawSingularExteriorDropdown(plotSize, [ExteriorItemType.Windows], windows, "Windows", onSelect)) invalidSelection = true;
+        if (DrawSingularExteriorDropdown(plotSize, [ExteriorItemType.Door], door, "Door", onSelect)) invalidSelection = true;
+        if (DrawSingularExteriorDropdown(plotSize, [ExteriorItemType.OptionalRoof], optionalRoof, "Roof Decoration", onSelect, true)) invalidSelection = true;
+        if (DrawSingularExteriorDropdown(plotSize, [ExteriorItemType.OptionalWall], optionalWall, "Wall Decoration", onSelect, true)) invalidSelection = true;
+        if (DrawSingularExteriorDropdown(plotSize, [ExteriorItemType.OptionalSignboard], optionalSignboard, "Signboard", onSelect, true)) invalidSelection = true;
+        if (DrawSingularExteriorDropdown(plotSize, [ExteriorItemType.Fence], fence, "Fence", onSelect, true)) invalidSelection = true;
       }
     }
+
+    return invalidSelection;
   }
-
-  private void DrawSingularExteriorDropdown(PlotSize? plotSize, ExteriorItemType[] types, UInt128? exterior, string text, Action<string, ushort?, UInt128?> onSelect, bool allowNone = false)
+  private bool DrawSingularExteriorDropdown(PlotSize? plotSize, ExteriorItemType[] types, UInt128? exterior, string text, Action<string, ushort?, UInt128?> onSelect, bool allowNone = false)
   {
+    string? selectedExteriorItemName = ExteriorItems.FirstOrNull(item => item.Id == exterior && types.Contains(item.Type))?.Name ?? null;
     ImGui.SetNextItemWidth(ImGui.GetContentRegionAvail().X);
+    bool invalidSelection = selectedExteriorItemName == null && exterior != 0;
 
-    string selectedExterior = ExteriorItems.Find(item => item.Id == exterior && types.Contains(item.Type)).Name ?? (exterior == 0 ? "None" : $"Existing {text}");
-    using (ImRaii.IEndObject dropdown = ImRaii.Combo($"##ExteriorSelect{text}", selectedExterior))
+    using (ImRaii.IEndObject dropdown = ImRaii.Combo($"##ExteriorSelect{text}", selectedExteriorItemName ?? (exterior == 0 ? "None" : _unitedExteriorSelection ? $"Existing {text}" : $"Select {text}...")))
     {
-      if (!dropdown.Success) return;
+      if (!dropdown.Success) return invalidSelection;
 
-      ISharedImmediateTexture? icon2 = GetExteriorIcon((sbyte)((_selectedPlot ?? 0) - 1), null).icon;
-      if (icon2 == null) return;
-      ImGui.Image(icon2.GetWrapOrEmpty().Handle, ScaledVector2(16));
-      ImGui.SameLine();
-      if (ImGui.Selectable($"Existing {text}", exterior == null))
+      if (_unitedExteriorSelection)
       {
-        onSelect(text, null, null);
+        ISharedImmediateTexture? icon2 = GetExteriorIcon((sbyte)((_selectedPlot ?? 0) - 1), null).icon;
+        if (icon2 == null) return invalidSelection;
+        ImGui.Image(icon2.GetWrapOrEmpty().Handle, ScaledVector2(16));
+        ImGui.SameLine();
+        if (ImGui.Selectable($"Existing {text}", exterior == null))
+        {
+          onSelect(text, null, null);
+        }
       }
 
       if (allowNone)
       {
         ImGui.Dummy(ScaledVector2(16));
         ImGui.SameLine();
-        if (ImGui.Selectable("None"))
+        if (ImGui.Selectable("None", exterior == 0))
         {
           onSelect(text, 0, null);
         }
@@ -1082,6 +1100,8 @@ public class ConfigWindow(ILogger _logger, Configuration _configuration, IExteri
         }
       }
     }
+
+    return invalidSelection;
   }
 
   private void DrawStainDropdown()
@@ -1166,7 +1186,7 @@ public class ConfigWindow(ILogger _logger, Configuration _configuration, IExteri
 
       foreach (Stain stainRow in _dataManager.GetExcelSheet<Stain>())
       {
-        if (stainRow.Name.IsEmpty) continue;
+        if (stainRow.Name.IsEmpty || !stainRow.IsHousingApplicable) continue;
 
         DrawColorCircle(stainRow.RowId, 16);
         ImGui.Dummy(ScaledVector2(16));

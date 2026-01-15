@@ -58,10 +58,8 @@ public class ExteriorService(ILogger _logger, Configuration _configuration, IFra
   public unsafe PlotSize? GetPlotSize(sbyte plot)
   {
     if (plot < DivisionMin | plot >= DivisionMax) return null;
-    if (_layoutWorld == null) return null;
-    LayoutManager* layoutManager = _layoutWorld->ActiveLayout;
-    if (layoutManager->InitState != 7) return null;
-    Span<OutdoorPlotExteriorData> plots = layoutManager->OutdoorExteriorData->Plots;
+    if (_layoutWorld == null || _layoutWorld->ActiveLayout == null || _layoutWorld->ActiveLayout->OutdoorExteriorData == null || _layoutWorld->ActiveLayout->InitState != 7) return null;
+    Span<OutdoorPlotExteriorData> plots = _layoutWorld->ActiveLayout->OutdoorExteriorData->Plots;
     if (plot >= plots.Length) return null;
     return plots[plot].Size;
   }
