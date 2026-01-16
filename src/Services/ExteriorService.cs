@@ -12,6 +12,7 @@ public interface IExteriorService : IHostedService
   event EventHandler? OnDivisionChange;
 
   PlotSize? GetPlotSize(sbyte plot);
+  short? GetPlotExterior(sbyte plot, ExteriorItemType type);
   IEnumerable<Facade> GetCurrentFacades();
   FestivalFacade? GetCurrentFestivalFacade();
   unsafe void UpdateFestival(bool reset = false);
@@ -62,6 +63,16 @@ public class ExteriorService(ILogger _logger, Configuration _configuration, IFra
     Span<OutdoorPlotExteriorData> plots = _layoutWorld->ActiveLayout->OutdoorExteriorData->Plots;
     if (plot >= plots.Length) return null;
     return plots[plot].Size;
+  }
+
+  public unsafe short? GetPlotExterior(sbyte plot, ExteriorItemType type)
+  {
+    if (plot < DivisionMin | plot >= DivisionMax) return null;
+    if (_layoutWorld == null || _layoutWorld->ActiveLayout == null || _layoutWorld->ActiveLayout->OutdoorExteriorData == null || _layoutWorld->ActiveLayout->InitState != 7) return null;
+    Span<OutdoorPlotExteriorData> plots = _layoutWorld->ActiveLayout->OutdoorExteriorData->Plots;
+    if (plot >= plots.Length) return null;
+    if (type > ExteriorItemType.Fence) return null;
+    return plots[plot].HousingExteriorIds[(int)type];
   }
 
   public Task StartAsync(CancellationToken cancellationToken)

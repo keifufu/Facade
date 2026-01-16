@@ -329,7 +329,7 @@ public class ConfigWindow(ILogger _logger, Configuration _configuration, IExteri
     uint stainColor = ColorHelpers.RgbaVector4ToUint(ImGui.GetStyle().Colors[(int)ImGuiCol.WindowBg]);
     if (stain != null && _dataManager.GetExcelSheet<Stain>().TryGetRow((uint)stain, out Stain stainRow))
     {
-      stainName = stainRow.Name.ToString();
+      stainName = stainRow.RowId == 0 ? "Undyed" : stainRow.Name.ToString();
       stainColor = ABGRtoARGB(stainRow.Color);
     }
     Vector2 pos = ImGui.GetCursorScreenPos() + ScaledVector2(unscaledPaddingTopLeft);
@@ -839,7 +839,7 @@ public class ConfigWindow(ILogger _logger, Configuration _configuration, IExteri
     {
       ImGui.Dummy(ScaledVector2(60, 0));
       ImGui.SameLine();
-      if (ImGui.RadioButton("United", _unitedExteriorSelection))
+      if (ImGui.RadioButton("Preset", _unitedExteriorSelection))
         _unitedExteriorSelection = true;
       ImGui.SameLine();
       if (ImGui.RadioButton("Individual", !_unitedExteriorSelection))
@@ -919,8 +919,8 @@ public class ConfigWindow(ILogger _logger, Configuration _configuration, IExteri
         {
           if (_selectedPlot != null && !invalidSelection)
           {
-            // If switching from Individual to United, Make sure "Existing Exterior" option is saved if nothing was manually selected.
-            if (_unitedExteriorSelection && _editingFacade.IsUnitedExterior != _unitedExteriorSelection)
+            // If a United Facade, make sure "Existing Exterior" option is saved if nothing was manually selected.
+            if (_unitedExteriorSelection)
             {
               if (ExteriorItems.Where(item => item.Id == _packedSelectedExterior).Count() == 0)
               {
@@ -1057,13 +1057,26 @@ public class ConfigWindow(ILogger _logger, Configuration _configuration, IExteri
 
     return invalidSelection;
   }
+
   private bool DrawSingularExteriorDropdown(PlotSize? plotSize, ExteriorItemType[] types, UInt128? exterior, string text, Action<string, ushort?, UInt128?> onSelect, bool allowNone = false)
   {
+    short? plotExterior = _exteriorService.GetPlotExterior((sbyte)((_selectedPlot ?? 0) - 1), types[0]);
+    ExteriorItem? plotExteriorItem = ExteriorItems.FirstOrNull(item => item.Id == (UInt128)(plotExterior ?? 0) && types.Contains(item.Type));
+
     string? selectedExteriorItemName = ExteriorItems.FirstOrNull(item => item.Id == exterior && types.Contains(item.Type))?.Name ?? null;
     ImGui.SetNextItemWidth(ImGui.GetContentRegionAvail().X);
     bool invalidSelection = selectedExteriorItemName == null && exterior != 0;
 
-    using (ImRaii.IEndObject dropdown = ImRaii.Combo($"##ExteriorSelect{text}", selectedExteriorItemName ?? (exterior == 0 ? "None" : _unitedExteriorSelection ? $"Existing {text}" : $"Select {text}...")))
+    if (invalidSelection && plotExteriorItem != null && plotExteriorItem.HasValue)
+    {
+      onSelect(text, (ushort)plotExteriorItem.Value.Id, null);
+    }
+    else if (invalidSelection && allowNone)
+    {
+      onSelect(text, 0, null);
+    }
+
+    using (ImRaii.IEndObject dropdown = ImRaii.Combo($"##ExteriorSelect{text}", selectedExteriorItemName ?? (exterior == 0 ? $"No {text}" : _unitedExteriorSelection ? $"Existing {text}" : plotExteriorItem != null && plotExteriorItem.HasValue ? plotExteriorItem.Value.Name.ToString() : $"Select {text}...")))
     {
       if (!dropdown.Success) return invalidSelection;
 
@@ -1083,7 +1096,7 @@ public class ConfigWindow(ILogger _logger, Configuration _configuration, IExteri
       {
         ImGui.Dummy(ScaledVector2(16));
         ImGui.SameLine();
-        if (ImGui.Selectable("None", exterior == 0))
+        if (ImGui.Selectable($"No {text}", exterior == 0))
         {
           onSelect(text, 0, null);
         }
