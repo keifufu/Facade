@@ -22,7 +22,7 @@ public interface IExteriorService : IHostedService
 public class ExteriorService(ILogger _logger, Configuration _configuration, IFramework _framework, IClientState _clientState, IPlayerState _playerState) : IExteriorService
 {
   private readonly Dictionary<int, OutdoorPlotExteriorData> _originalExteriorData = [];
-  private readonly List<ushort> _originalFestival = [];
+  private readonly List<GameMain.Festival> _originalFestival = [];
   private bool _wasNotLoaded = false;
 
   public event EventHandler? OnDivisionChange;
@@ -142,22 +142,21 @@ public class ExteriorService(ILogger _logger, Configuration _configuration, IFra
     return _configuration.FestivalFacades.FirstOrDefault(facade => facade.World == CurrentWorld && facade.District == CurrentDistrict && facade.Ward == CurrentWard);
   }
 
-  private unsafe void SetFestival(List<ushort> festivalIds)
+  private unsafe void SetFestival(List<GameMain.Festival> festivals)
   {
-    if (festivalIds.Count != 8)
-    {
-      _logger.Error($"wrong list length: {festivalIds.Count}");
-      return;
-    }
+    if (festivals.Count != 8) return;
 
-    ushort* festivalArray = stackalloc ushort[] { 0, 0, 0, 0, 0, 0, 0, 0 };
-    for (int i = 0; i < 8; i++)
+    fixed (GameMain.Festival* festivalsArray = new GameMain.Festival[8])
     {
-      festivalArray[i] = festivalIds[i];
-    }
+      for (int i = 0; i < 8; i++)
+      {
+        festivalsArray[i].Id = festivals[i].Id;
+        festivalsArray[i].Phase = festivals[i].Phase;
+      }
 
-    if (_layoutWorld == null || _layoutWorld->ActiveLayout == null) return;
-    _layoutWorld->ActiveLayout->SetActiveFestivals((GameMain.Festival*)festivalArray);
+      if (_layoutWorld == null || _layoutWorld->ActiveLayout == null) return;
+      _layoutWorld->ActiveLayout->SetActiveFestivals(festivalsArray);
+    }
   }
 
   public unsafe void UpdateFestival(bool reset = false)
@@ -176,12 +175,31 @@ public class ExteriorService(ILogger _logger, Configuration _configuration, IFra
       {
         foreach (GameMain.Festival festival in _layoutWorld->ActiveLayout->ActiveFestivals)
         {
-          _originalFestival.Add(festival.Id);
+          _logger.Debug($"{festival.Id} {festival.Phase}");
+          _originalFestival.Add(festival);
         }
       }
 
-      List<ushort> currentFestivalIds = [festivalFacade.Id, 0, 0, 0, 0, 0, 0, 0];
+      GameMain.Festival newFestival = new()
+      {
+        Id = festivalFacade.Id
+      };
+      GameMain.Festival empty = new();
+      List<GameMain.Festival> currentFestivalIds = [newFestival, empty, empty, empty, empty, empty, empty, empty];
       SetFestival(currentFestivalIds);
+    }
+  }
+
+  private unsafe void SetExterior(sbyte plot, OutdoorPlotExteriorData exteriorData)
+  {
+    if (_layoutWorld == null || _layoutWorld->ActiveLayout == null || _layoutWorld->ActiveLayout->OutdoorExteriorData == null) return;
+    if (plot >= 60) return;
+    if (_layoutWorld->ActiveLayout->OutdoorExteriorData->Plots[plot].Size != exteriorData.Size) return;
+    _layoutWorld->ActiveLayout->HousingLayoutDataUpdatePending = true;
+    for (int i = 0; i < 8; i++)
+    {
+      _layoutWorld->ActiveLayout->OutdoorExteriorData->Plots[plot].HousingExteriorIds[i] = exteriorData.HousingExteriorIds[i];
+      _layoutWorld->ActiveLayout->OutdoorExteriorData->Plots[plot].StainIds[i] = exteriorData.StainIds[i];
     }
   }
 
@@ -203,7 +221,7 @@ public class ExteriorService(ILogger _logger, Configuration _configuration, IFra
       {
         if (_originalExteriorData.TryGetValue(facade.Plot, out OutdoorPlotExteriorData originalExteriorData))
         {
-          _layoutWorld->ActiveLayout->SetOutdoorPlotExterior(facade.Plot, &originalExteriorData);
+          SetExterior(facade.Plot, originalExteriorData);
         }
       }
       else
@@ -254,7 +272,7 @@ public class ExteriorService(ILogger _logger, Configuration _configuration, IFra
         SetType(exteriorData.StainIds, ExteriorItemType.OptionalSignboard, optionalSignboardStain, (data, index) => data.StainIds[index]);
         SetType(exteriorData.StainIds, ExteriorItemType.Fence, fenceStain, (data, index) => data.StainIds[index]);
 
-        _layoutWorld->ActiveLayout->SetOutdoorPlotExterior(facade.Plot, &exteriorData);
+        SetExterior(facade.Plot, exteriorData);
       }
     }
 
@@ -264,7 +282,7 @@ public class ExteriorService(ILogger _logger, Configuration _configuration, IFra
       {
         if (_originalExteriorData.TryGetValue(plot, out OutdoorPlotExteriorData originalExteriorData))
         {
-          _layoutWorld->ActiveLayout->SetOutdoorPlotExterior(plot, &originalExteriorData);
+          SetExterior((sbyte)plot, originalExteriorData);
           _originalExteriorData.Remove(plot);
         }
       }
