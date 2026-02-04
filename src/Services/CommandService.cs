@@ -2,7 +2,8 @@ namespace Facade.Services;
 
 public interface ICommandService : IHostedService;
 
-public class CommandService(ILogger _logger, ConfigWindow _configWindow, ICommandManager _commandManager) : ICommandService
+#pragma warning disable CS9113
+public class CommandService(ILogger _logger, ConfigWindow _configWindow, ICommandManager _commandManager, IPlotService _plotService) : ICommandService
 {
   private const string FacadeCommand = "/facade";
 
@@ -39,6 +40,14 @@ public class CommandService(ILogger _logger, ConfigWindow _configWindow, IComman
 
     switch (args[0])
     {
+#if SAVE_MODE
+      case "save-corner":
+        _plotService.SaveCorner();
+        break;
+      case "save-json":
+        _plotService.SaveJson();
+        break;
+#endif
       case "version":
         _logger.Chat($"v{Assembly.GetExecutingAssembly()?.GetName()?.Version?.ToString() ?? "0.0.0.0"}");
         break;

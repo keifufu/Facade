@@ -2,24 +2,16 @@ namespace Facade.Services;
 
 public interface IExteriorService : IHostedService
 {
-  uint CurrentWorld { get; }
-  District CurrentDistrict { get; }
-  sbyte CurrentWard { get; }
-  byte CurrentDivision { get; }
-  int DivisionMin { get; }
-  int DivisionMax { get; }
-
   event EventHandler? OnDivisionChange;
-
   PlotSize? GetPlotSize(sbyte plot);
   short? GetPlotExterior(sbyte plot, ExteriorItemType type);
   IEnumerable<Facade> GetCurrentFacades();
   FestivalFacade? GetCurrentFestivalFacade();
   unsafe void UpdateFestival(bool reset = false);
-  unsafe void UpdateExteriors(bool reset = false);
+  unsafe void UpdateExteriors(bool reset = false, sbyte? currentPlot = null);
 }
 
-public class ExteriorService(ILogger _logger, Configuration _configuration, IFramework _framework, IClientState _clientState, IPlayerState _playerState) : IExteriorService
+public class ExteriorService(ILogger _logger, Configuration _configuration, IPlotService _plotService, IFramework _framework) : IExteriorService
 {
   private readonly Dictionary<int, OutdoorPlotExteriorData> _originalExteriorData = [];
   private readonly List<GameMain.Festival> _originalFestival = [];
@@ -27,38 +19,17 @@ public class ExteriorService(ILogger _logger, Configuration _configuration, IFra
 
   public event EventHandler? OnDivisionChange;
 
-  public uint CurrentWorld => _playerState.CurrentWorld.RowId;
   private unsafe HousingManager* _housingManager => HousingManager.Instance();
   private unsafe LayoutWorld* _layoutWorld => LayoutWorld.Instance();
+  private sbyte _lastWard = -1;
+  private byte _lastDivision = 0;
+  private sbyte _lastPlot = -1;
 
   private District _lastDistrict = District.Invalid;
-  public District CurrentDistrict
-  {
-    get
-    {
-      if (Enum.IsDefined(typeof(District), _clientState.TerritoryType))
-      {
-        return (District)_clientState.TerritoryType;
-      }
-      return District.Invalid;
-    }
-  }
-
-  private sbyte _lastWard = -1;
-  public unsafe sbyte CurrentWard => _housingManager == null ? (sbyte)-1 : _housingManager->GetCurrentWard();
-
-  private byte _lastDivision = 0;
-  public unsafe byte CurrentDivision => _housingManager == null ? (byte)0 : _housingManager->GetCurrentDivision();
-
-  private sbyte _lastPlot = -1;
-  private unsafe sbyte CurrentPlot => _housingManager == null ? (sbyte)-1 : _housingManager->GetCurrentPlot();
-
-  public int DivisionMin => CurrentDivision == 1 ? 0 : 30;
-  public int DivisionMax => CurrentDivision == 1 ? 30 : 60;
 
   public unsafe PlotSize? GetPlotSize(sbyte plot)
   {
-    if (plot < DivisionMin | plot >= DivisionMax) return null;
+    if (plot < _plotService.DivisionMin | plot >= _plotService.DivisionMax) return null;
     if (_layoutWorld == null || _layoutWorld->ActiveLayout == null || _layoutWorld->ActiveLayout->OutdoorExteriorData == null || _layoutWorld->ActiveLayout->InitState != 7) return null;
     Span<OutdoorPlotExteriorData> plots = _layoutWorld->ActiveLayout->OutdoorExteriorData->Plots;
     if (plot >= plots.Length) return null;
@@ -67,7 +38,7 @@ public class ExteriorService(ILogger _logger, Configuration _configuration, IFra
 
   public unsafe short? GetPlotExterior(sbyte plot, ExteriorItemType type)
   {
-    if (plot < DivisionMin | plot >= DivisionMax) return null;
+    if (plot < _plotService.DivisionMin | plot >= _plotService.DivisionMax) return null;
     if (_layoutWorld == null || _layoutWorld->ActiveLayout == null || _layoutWorld->ActiveLayout->OutdoorExteriorData == null || _layoutWorld->ActiveLayout->InitState != 7) return null;
     Span<OutdoorPlotExteriorData> plots = _layoutWorld->ActiveLayout->OutdoorExteriorData->Plots;
     if (plot >= plots.Length) return null;
@@ -94,22 +65,31 @@ public class ExteriorService(ILogger _logger, Configuration _configuration, IFra
     return Task.CompletedTask;
   }
 
-  // Is doing this on every frame fine? Yeah.
   private void OnFrameworkUpdate(IFramework _)
   {
+#if SAVE_MODE
+    unsafe
+    {
+      if (_housingManager != null && _housingManager->OutdoorTerritory != null)
+      {
+        _housingManager->OutdoorTerritory->FurnitureStruct.FurnitureVector.Clear();
+      }
+    }
+#endif
+
     bool shouldUpdateExteriors = false;
 
-    if (CurrentDistrict != _lastDistrict || CurrentWard != _lastWard)
+    if (_plotService.CurrentDistrict != _lastDistrict || _plotService.CurrentWard != _lastWard)
     {
       _originalFestival.Clear();
       UpdateFestival();
     }
 
-    if (CurrentDistrict != _lastDistrict || CurrentWard != _lastWard || CurrentDivision != _lastDivision)
+    if (_plotService.CurrentDistrict != _lastDistrict || _plotService.CurrentWard != _lastWard || _plotService.CurrentDivision != _lastDivision)
     {
-      _lastDistrict = CurrentDistrict;
-      _lastWard = CurrentWard;
-      _lastDivision = CurrentDivision;
+      _lastDistrict = _plotService.CurrentDistrict;
+      _lastWard = _plotService.CurrentWard;
+      _lastDivision = _plotService.CurrentDivision;
 
       _originalExteriorData.Clear();
       shouldUpdateExteriors = true;
@@ -117,9 +97,10 @@ public class ExteriorService(ILogger _logger, Configuration _configuration, IFra
       OnDivisionChange?.Invoke(this, new());
     }
 
-    if (CurrentPlot != _lastPlot)
+    sbyte currentPlot = _plotService.GetCurrentPlot();
+    if (currentPlot != _lastPlot)
     {
-      _lastPlot = CurrentPlot;
+      _lastPlot = currentPlot;
       shouldUpdateExteriors = true;
     }
 
@@ -129,21 +110,41 @@ public class ExteriorService(ILogger _logger, Configuration _configuration, IFra
       shouldUpdateExteriors = true;
     }
 
-    if (shouldUpdateExteriors) UpdateExteriors();
+    if (shouldUpdateExteriors) UpdateExteriors(false, currentPlot);
   }
 
   public IEnumerable<Facade> GetCurrentFacades()
   {
-    return _configuration.Facades.Where(facade => facade.World == CurrentWorld && facade.District == CurrentDistrict && facade.Ward == CurrentWard && facade.Plot >= DivisionMin && facade.Plot < DivisionMax);
+#if SAVE_MODE
+    List<Facade> facades = [];
+    for (int i = _plotService.DivisionMin; i < _plotService.DivisionMax; i++)
+    {
+      facades.Add(new()
+      {
+        World = _plotService.CurrentWorld,
+        District = _plotService.CurrentDistrict,
+        IsUnitedExterior = false,
+        PackedExteriorIds = UInt128.Parse("15976697433711664612988337205245378560"),
+        PackedStainIds = 0,
+        Ward = _plotService.CurrentWard,
+        Plot = (sbyte)i,
+      });
+    }
+    return facades;
+#pragma warning disable CS0162
+#endif
+
+    return _configuration.Facades.Where(facade => facade.World == _plotService.CurrentWorld && facade.District == _plotService.CurrentDistrict && facade.Ward == _plotService.CurrentWard && facade.Plot >= _plotService.DivisionMin && facade.Plot < _plotService.DivisionMax);
   }
 
   public FestivalFacade? GetCurrentFestivalFacade()
   {
-    return _configuration.FestivalFacades.FirstOrDefault(facade => facade.World == CurrentWorld && facade.District == CurrentDistrict && facade.Ward == CurrentWard);
+    return _configuration.FestivalFacades.FirstOrDefault(facade => facade.World == _plotService.CurrentWorld && facade.District == _plotService.CurrentDistrict && facade.Ward == _plotService.CurrentWard);
   }
 
   private unsafe void SetFestival(List<GameMain.Festival> festivals)
   {
+    if (_plotService.CurrentDivision == 0) return;
     if (festivals.Count != 8) return;
 
     fixed (GameMain.Festival* festivalsArray = new GameMain.Festival[8])
@@ -203,8 +204,10 @@ public class ExteriorService(ILogger _logger, Configuration _configuration, IFra
     }
   }
 
-  public unsafe void UpdateExteriors(bool reset = false)
+  public unsafe void UpdateExteriors(bool reset = false, sbyte? _currentPlot = null)
   {
+    sbyte currentPlot = _currentPlot ?? _plotService.GetCurrentPlot();
+
     if (_layoutWorld == null || _layoutWorld->ActiveLayout == null || _layoutWorld->ActiveLayout->OutdoorExteriorData == null) return;
     Span<OutdoorPlotExteriorData> exteriorPlots = _layoutWorld->ActiveLayout->OutdoorExteriorData->Plots;
     List<int> handledPlots = [];
@@ -217,7 +220,7 @@ public class ExteriorService(ILogger _logger, Configuration _configuration, IFra
       byte plotSize = (byte)exteriorData.Size;
       handledPlots.Add(facade.Plot);
 
-      if (CurrentPlot == facade.Plot || reset)
+      if (currentPlot == facade.Plot || reset)
       {
         if (_originalExteriorData.TryGetValue(facade.Plot, out OutdoorPlotExteriorData originalExteriorData))
         {

@@ -31,4 +31,3 @@ global using FFXIVClientStructs.FFXIV.Client.LayoutEngine;
 global using Lumina.Excel.Sheets;
 global using Lumina.Extensions;
 global using Microsoft.Extensions.Hosting;
-global using Newtonsoft.Json;

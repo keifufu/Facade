@@ -15,6 +15,7 @@ public sealed class Plugin : IDalamudPlugin
     IFramework framework,
     IDataManager dataManager,
     IClientState clientState,
+    IObjectTable objectTable,
     IPlayerState playerState,
     ICommandManager commandManager,
     ITextureProvider textureProvider,
@@ -34,6 +35,7 @@ public sealed class Plugin : IDalamudPlugin
         collection.AddSingleton(framework);
         collection.AddSingleton(dataManager);
         collection.AddSingleton(clientState);
+        collection.AddSingleton(objectTable);
         collection.AddSingleton(playerState);
         collection.AddSingleton(commandManager);
         collection.AddSingleton(textureProvider);
@@ -41,6 +43,7 @@ public sealed class Plugin : IDalamudPlugin
 
         collection.AddSingleton<ConfigWindow>();
         collection.AddSingleton<ILogger, Logger>();
+        collection.AddSingleton<IPlotService, PlotService>();
         collection.AddSingleton<IWindowService, WindowService>();
         collection.AddSingleton<ICommandService, CommandService>();
         collection.AddSingleton<IExteriorService, ExteriorService>();
@@ -49,6 +52,7 @@ public sealed class Plugin : IDalamudPlugin
         collection.AddSingleton(new WindowSystem(pluginInterface.InternalName));
 
         collection.AddHostedService(sp => sp.GetRequiredService<ConfigWindow>());
+        collection.AddHostedService(sp => sp.GetRequiredService<IPlotService>());
         collection.AddHostedService(sp => sp.GetRequiredService<IWindowService>());
         collection.AddHostedService(sp => sp.GetRequiredService<ICommandService>());
         collection.AddHostedService(sp => sp.GetRequiredService<IExteriorService>());

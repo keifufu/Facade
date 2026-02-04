@@ -1,6 +1,6 @@
 namespace Facade.Windows;
 
-public class ConfigWindow(ILogger _logger, Configuration _configuration, IExteriorService _exteriorService, IDataManager _dataManager, IDalamudPluginInterface _pluginInterface, ITextureProvider _textureProvider) : Window("Facade##FacadeConfigWindow"), IHostedService
+public class ConfigWindow(ILogger _logger, Configuration _configuration, IExteriorService _exteriorService, IPlotService _plotService, IDataManager _dataManager, IDalamudPluginInterface _pluginInterface, ITextureProvider _textureProvider) : Window("Facade##FacadeConfigWindow"), IHostedService
 {
   private bool _addingFacade = false;
   private Facade? _editingFacade = null;
@@ -164,7 +164,7 @@ public class ConfigWindow(ILogger _logger, Configuration _configuration, IExteri
 
   private string SerializeToBase64(object obj)
   {
-    string json = JsonConvert.SerializeObject(obj);
+    string json = Newtonsoft.Json.JsonConvert.SerializeObject(obj);
     byte[] bytes = Encoding.UTF8.GetBytes(json);
     using MemoryStream compressedStream = new();
     using (GZipStream zipStream = new(compressedStream, CompressionMode.Compress))
@@ -183,7 +183,7 @@ public class ConfigWindow(ILogger _logger, Configuration _configuration, IExteri
       zipStream.CopyTo(resultStream);
       bytes = resultStream.ToArray();
       string json = Encoding.UTF8.GetString(bytes);
-      T? deserializedObject = JsonConvert.DeserializeObject<T>(json);
+      T? deserializedObject = Newtonsoft.Json.JsonConvert.DeserializeObject<T>(json);
       if (deserializedObject is T typedObject)
       {
         return typedObject;
@@ -209,7 +209,7 @@ public class ConfigWindow(ILogger _logger, Configuration _configuration, IExteri
       return;
     }
 
-    bool buttonsDisabled = _exteriorService.CurrentDivision == 0;
+    bool buttonsDisabled = _plotService.CurrentDivision == 0;
     bool buttonsDisabledFestivalView = buttonsDisabled || _festivalView;
     bool buttonsHovered = false;
     using (ImRaii.PushStyle(ImGuiStyleVar.Alpha, ImGui.GetStyle().Alpha * 0.5f, buttonsDisabled))
@@ -340,7 +340,7 @@ public class ConfigWindow(ILogger _logger, Configuration _configuration, IExteri
 
   private void DrawFestivalFacadeList()
   {
-    using (ImRaii.Disabled(_exteriorService.CurrentDivision == 0))
+    using (ImRaii.Disabled(_plotService.CurrentDivision == 0))
     {
       ImGui.Dummy(ScaledVector2(4));
 
@@ -355,7 +355,7 @@ public class ConfigWindow(ILogger _logger, Configuration _configuration, IExteri
         {
           foreach (Festival festival in _festivals)
           {
-            if (festival.Id == 43 && _exteriorService.CurrentDistrict != District.Mist && _exteriorService.CurrentDistrict != District.TheGoblet && _exteriorService.CurrentDistrict != District.LavenderBeds) continue;
+            if (festival.Id == 43 && _plotService.CurrentDistrict != District.Mist && _plotService.CurrentDistrict != District.TheGoblet && _plotService.CurrentDistrict != District.LavenderBeds) continue;
             if (ImGui.Selectable(festival.Name, currentFestivalId == festival.Id))
             {
               if (currentFestivalFacade != null && festival.Id == ushort.MaxValue)
@@ -370,9 +370,9 @@ public class ConfigWindow(ILogger _logger, Configuration _configuration, IExteri
               {
                 _configuration.FestivalFacades.Add(new FestivalFacade()
                 {
-                  World = _exteriorService.CurrentWorld,
-                  District = _exteriorService.CurrentDistrict,
-                  Ward = _exteriorService.CurrentWard,
+                  World = _plotService.CurrentWorld,
+                  District = _plotService.CurrentDistrict,
+                  Ward = _plotService.CurrentWard,
                   Id = festival.Id,
                 });
               }
@@ -750,7 +750,7 @@ public class ConfigWindow(ILogger _logger, Configuration _configuration, IExteri
 
       if (_festivalView)
       {
-        IEnumerable<FestivalFacade> festivalFacades = _configuration.FestivalFacades.Where(f => !(f.Ward == _exteriorService.CurrentWard && f.District == _exteriorService.CurrentDistrict && f.Ward == _exteriorService.CurrentWard)).ToList();
+        IEnumerable<FestivalFacade> festivalFacades = _configuration.FestivalFacades.Where(f => !(f.Ward == _plotService.CurrentWard && f.District == _plotService.CurrentDistrict && f.Ward == _plotService.CurrentWard)).ToList();
 
         foreach (FestivalFacade festivalFacade in festivalFacades)
         {
@@ -770,7 +770,7 @@ public class ConfigWindow(ILogger _logger, Configuration _configuration, IExteri
       else
       {
         var facades = _configuration.Facades
-          .Where(f => !(f.Ward == _exteriorService.CurrentWard && f.District == _exteriorService.CurrentDistrict && f.Ward == _exteriorService.CurrentWard))
+          .Where(f => !(f.Ward == _plotService.CurrentWard && f.District == _plotService.CurrentDistrict && f.Ward == _plotService.CurrentWard))
           .GroupBy(f => new { f.World, f.District, f.Ward })
           .Select(g => new { Facade = g.First(), Count = g.Count() }).ToList();
 
@@ -881,9 +881,9 @@ public class ConfigWindow(ILogger _logger, Configuration _configuration, IExteri
           {
             _configuration.Facades.Add(new Facade
             {
-              World = _exteriorService.CurrentWorld,
-              District = _exteriorService.CurrentDistrict,
-              Ward = _exteriorService.CurrentWard,
+              World = _plotService.CurrentWorld,
+              District = _plotService.CurrentDistrict,
+              Ward = _plotService.CurrentWard,
               Plot = (sbyte)(_selectedPlot! - 1),
               PackedExteriorIds = _packedSelectedExterior,
               PackedStainIds = _packedSelectedStain,
@@ -979,7 +979,7 @@ public class ConfigWindow(ILogger _logger, Configuration _configuration, IExteri
     using (ImRaii.IEndObject dropdown = ImRaii.Combo("##PlotSelect", _selectedPlot == null ? "Select Plot" : _selectedPlot.ToString()))
     {
       if (!dropdown.Success) return;
-      for (int i = _exteriorService.DivisionMin + 1; i < _exteriorService.DivisionMax + 1; i++)
+      for (int i = _plotService.DivisionMin + 1; i < _plotService.DivisionMax + 1; i++)
       {
         if (facades.Any(f => f.Plot == i - 1)) continue;
         if (ImGui.Selectable(i.ToString(), _selectedPlot == i))
