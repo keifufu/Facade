@@ -8,7 +8,7 @@ public interface IExteriorService : IHostedService
   IEnumerable<Facade> GetCurrentFacades();
   FestivalFacade? GetCurrentFestivalFacade();
   unsafe void UpdateFestival(bool reset = false);
-  unsafe void UpdateExteriors(bool reset = false, sbyte? currentPlot = null);
+  unsafe void UpdateExteriors(bool reset = false, List<sbyte>? currentPlot = null);
 }
 
 public class ExteriorService(ILogger _logger, Configuration _configuration, IPlotService _plotService, IFramework _framework) : IExteriorService
@@ -23,7 +23,7 @@ public class ExteriorService(ILogger _logger, Configuration _configuration, IPlo
   private unsafe LayoutWorld* _layoutWorld => LayoutWorld.Instance();
   private sbyte _lastWard = -1;
   private byte _lastDivision = 0;
-  private sbyte _lastPlot = -1;
+  private List<sbyte> _lastPlots = [];
 
   private District _lastDistrict = District.Invalid;
 
@@ -97,10 +97,10 @@ public class ExteriorService(ILogger _logger, Configuration _configuration, IPlo
       OnDivisionChange?.Invoke(this, new());
     }
 
-    sbyte currentPlot = _plotService.GetCurrentPlot();
-    if (currentPlot != _lastPlot)
+    List<sbyte> currentPlots = _plotService.GetCurrentPlots();
+    if (!currentPlots.SequenceEqual(_lastPlots))
     {
-      _lastPlot = currentPlot;
+      _lastPlots = currentPlots;
       shouldUpdateExteriors = true;
     }
 
@@ -110,7 +110,7 @@ public class ExteriorService(ILogger _logger, Configuration _configuration, IPlo
       shouldUpdateExteriors = true;
     }
 
-    if (shouldUpdateExteriors) UpdateExteriors(false, currentPlot);
+    if (shouldUpdateExteriors) UpdateExteriors(false, currentPlots);
   }
 
   public IEnumerable<Facade> GetCurrentFacades()
@@ -204,9 +204,9 @@ public class ExteriorService(ILogger _logger, Configuration _configuration, IPlo
     }
   }
 
-  public unsafe void UpdateExteriors(bool reset = false, sbyte? _currentPlot = null)
+  public unsafe void UpdateExteriors(bool reset = false, List<sbyte>? _currentPlot = null)
   {
-    sbyte currentPlot = _currentPlot ?? _plotService.GetCurrentPlot();
+    List<sbyte> currentPlots = _currentPlot ?? _plotService.GetCurrentPlots();
 
     if (_layoutWorld == null || _layoutWorld->ActiveLayout == null || _layoutWorld->ActiveLayout->OutdoorExteriorData == null) return;
     Span<OutdoorPlotExteriorData> exteriorPlots = _layoutWorld->ActiveLayout->OutdoorExteriorData->Plots;
@@ -220,7 +220,7 @@ public class ExteriorService(ILogger _logger, Configuration _configuration, IPlo
       byte plotSize = (byte)exteriorData.Size;
       handledPlots.Add(facade.Plot);
 
-      if (currentPlot == facade.Plot || reset)
+      if (currentPlots.Contains(facade.Plot) || reset)
       {
         if (_originalExteriorData.TryGetValue(facade.Plot, out OutdoorPlotExteriorData originalExteriorData))
         {

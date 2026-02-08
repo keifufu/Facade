@@ -12,7 +12,7 @@ public interface IPlotService : IHostedService
   int DivisionMin { get; }
   int DivisionMax { get; }
 
-  sbyte GetCurrentPlot();
+  List<sbyte> GetCurrentPlots();
 
 #if SAVE_MODE
   void SaveCorner();
@@ -77,35 +77,40 @@ public class PlotService(ILogger _logger, IClientState _clientState, IDalamudPlu
   public int DivisionMax => CurrentDivision == 1 ? 30 : 60;
 
   private Vector2 _lastPosition;
-  private sbyte _lastPlot = -1;
-  public unsafe sbyte GetCurrentPlot()
+  private List<sbyte> _lastPlots = [];
+  public unsafe List<sbyte> GetCurrentPlots()
   {
 #if SAVE_MODE
-    return -1;
+    return [];
 #pragma warning disable CS0162
 #endif
 
-    if (CurrentWard == -1) return -1;
-    if (_objectTable.LocalPlayer == null) return -1;
+    if (CurrentWard == -1) return [];
+    if (_objectTable.LocalPlayer == null) return [];
 
     Vector2 position = new(_objectTable.LocalPlayer.Position.X, _objectTable.LocalPlayer.Position.Z);
-    if (_lastPosition == position) return _lastPlot;
+    if (_lastPosition == position) return _lastPlots;
     _lastPosition = position;
 
     _plots.TryGetValue((CurrentDistrict, CurrentDivision), out List<Plot>? plots);
-    if (plots == null) return -1;
+    if (plots == null) return [_housingManager->GetCurrentPlot()];
 
+    List<sbyte> currentPlots = [];
     foreach (Plot plot in plots)
     {
       if (plot.IsInside(position, 7.5f))
       {
-        _lastPlot = plot.PlotId;
-        return _lastPlot;
+        currentPlots.Add(plot.PlotId);
       }
     }
 
-    _lastPlot = _housingManager->GetCurrentPlot();
-    return _lastPlot;
+    _lastPlots = currentPlots;
+    if (_lastPlots.Count == 0)
+    {
+      _lastPlots = [_housingManager->GetCurrentPlot()];
+    }
+
+    return _lastPlots;
   }
 
 #if SAVE_MODE
