@@ -14,7 +14,7 @@ public interface IPlotService : IHostedService
   int DivisionMin { get; }
   int DivisionMax { get; }
 
-  List<sbyte> GetCurrentPlots();
+  List<sbyte> GetCurrentPlots(bool reset = false);
 
 #if SAVE_MODE
   void SaveCorner();
@@ -81,7 +81,7 @@ public class PlotService(ILogger _logger, Configuration _configuration, IClientS
   private List<(Vector2, uint)> _lastPositions = [];
   private List<sbyte> _lastPlots = [];
   private PlayerBehavior _previousPlayerBehavior = PlayerBehavior.Nothing;
-  public unsafe List<sbyte> GetCurrentPlots()
+  public unsafe List<sbyte> GetCurrentPlots(bool reset = false)
   {
 #if SAVE_MODE
     return [];
@@ -94,7 +94,7 @@ public class PlotService(ILogger _logger, Configuration _configuration, IClientS
     List<(Vector2, uint)> positions = [];
     foreach (IBattleChara player in _objectTable.PlayerObjects)
     {
-      if (_configuration.PlayerBehavior != PlayerBehavior.Nothing || _previousPlayerBehavior != _configuration.PlayerBehavior || player.EntityId == _objectTable.LocalPlayer.EntityId)
+      if (_configuration.PlayerBehavior != PlayerBehavior.Nothing || _previousPlayerBehavior != _configuration.PlayerBehavior || player.EntityId == _objectTable.LocalPlayer.EntityId || reset)
       {
         positions.Add((new(player.Position.X, player.Position.Z), player.EntityId));
         ((GameObject*)player.Address)->RenderFlags &= ~(VisibilityFlags.Model | VisibilityFlags.Nameplate);
@@ -119,7 +119,7 @@ public class PlotService(ILogger _logger, Configuration _configuration, IClientS
           if (_configuration.PlayerBehavior == PlayerBehavior.HidePlayers && _objectTable.LocalPlayer.EntityId != entityId)
           {
             IGameObject gameObject = _objectTable.First((o) => o.EntityId == entityId);
-            if (gameObject != null && !localPlayerPlots.Contains(plot.PlotId))
+            if (gameObject != null && !localPlayerPlots.Contains(plot.PlotId) && !reset)
             {
               ((GameObject*)gameObject.Address)->RenderFlags |= VisibilityFlags.Model | VisibilityFlags.Nameplate;
             }

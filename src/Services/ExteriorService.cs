@@ -205,7 +205,7 @@ public class ExteriorService(ILogger _logger, Configuration _configuration, IPlo
 
   public unsafe void UpdateExteriors(bool reset = false, List<sbyte>? _currentPlots = null)
   {
-    List<sbyte> currentPlots = _currentPlots ?? _plotService.GetCurrentPlots();
+    List<sbyte> currentPlots = _currentPlots ?? _plotService.GetCurrentPlots(reset);
 
     if (_layoutWorld == null || _layoutWorld->ActiveLayout == null || _layoutWorld->ActiveLayout->OutdoorExteriorData == null) return;
     Span<OutdoorPlotExteriorData> exteriorPlots = _layoutWorld->ActiveLayout->OutdoorExteriorData->Plots;
