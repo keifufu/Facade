@@ -45,6 +45,14 @@ public class Preset
 }
 
 [Serializable]
+public enum PlayerBehavior
+{
+  Nothing,
+  ResetFacade,
+  HidePlayers,
+}
+
+[Serializable]
 public class Configuration : IPluginConfiguration
 {
   public int Version { get; set; } = 0;
@@ -52,6 +60,7 @@ public class Configuration : IPluginConfiguration
   public List<Facade> Facades { get; set; } = [];
   public List<FestivalFacade> FestivalFacades { get; set; } = [];
   public List<Preset> Presets { get; set; } = [];
+  public PlayerBehavior PlayerBehavior { get; set; } = PlayerBehavior.Nothing;
 
   [NonSerialized]
   private IDalamudPluginInterface? PluginInterface;

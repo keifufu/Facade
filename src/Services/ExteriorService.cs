@@ -8,7 +8,7 @@ public interface IExteriorService : IHostedService
   IEnumerable<Facade> GetCurrentFacades();
   FestivalFacade? GetCurrentFestivalFacade();
   unsafe void UpdateFestival(bool reset = false);
-  unsafe void UpdateExteriors(bool reset = false, List<sbyte>? currentPlot = null);
+  unsafe void UpdateExteriors(bool reset = false, List<sbyte>? currentPlots = null);
 }
 
 public class ExteriorService(ILogger _logger, Configuration _configuration, IPlotService _plotService, IFramework _framework) : IExteriorService
@@ -176,7 +176,6 @@ public class ExteriorService(ILogger _logger, Configuration _configuration, IPlo
       {
         foreach (GameMain.Festival festival in _layoutWorld->ActiveLayout->ActiveFestivals)
         {
-          _logger.Debug($"{festival.Id} {festival.Phase}");
           _originalFestival.Add(festival);
         }
       }
@@ -204,9 +203,9 @@ public class ExteriorService(ILogger _logger, Configuration _configuration, IPlo
     }
   }
 
-  public unsafe void UpdateExteriors(bool reset = false, List<sbyte>? _currentPlot = null)
+  public unsafe void UpdateExteriors(bool reset = false, List<sbyte>? _currentPlots = null)
   {
-    List<sbyte> currentPlots = _currentPlot ?? _plotService.GetCurrentPlots();
+    List<sbyte> currentPlots = _currentPlots ?? _plotService.GetCurrentPlots();
 
     if (_layoutWorld == null || _layoutWorld->ActiveLayout == null || _layoutWorld->ActiveLayout->OutdoorExteriorData == null) return;
     Span<OutdoorPlotExteriorData> exteriorPlots = _layoutWorld->ActiveLayout->OutdoorExteriorData->Plots;

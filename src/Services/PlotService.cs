@@ -1,5 +1,7 @@
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using Dalamud.Game.ClientState.Objects.Types;
+using FFXIVClientStructs.FFXIV.Client.Game.Object;
 
 namespace Facade.Services;
 
@@ -20,7 +22,7 @@ public interface IPlotService : IHostedService
 #endif
 }
 
-public class PlotService(ILogger _logger, IClientState _clientState, IDalamudPluginInterface _pluginInterface, IPlayerState _playerState, IObjectTable _objectTable) : IPlotService
+public class PlotService(ILogger _logger, Configuration _configuration, IClientState _clientState, IDalamudPluginInterface _pluginInterface, IPlayerState _playerState, IObjectTable _objectTable) : IPlotService
 {
   private Dictionary<(District District, byte Division), List<Plot>> _plots = [];
 
@@ -76,8 +78,9 @@ public class PlotService(ILogger _logger, IClientState _clientState, IDalamudPlu
   public int DivisionMin => CurrentDivision == 1 ? 0 : 30;
   public int DivisionMax => CurrentDivision == 1 ? 30 : 60;
 
-  private Vector2 _lastPosition;
+  private List<(Vector2, uint)> _lastPositions = [];
   private List<sbyte> _lastPlots = [];
+  private PlayerBehavior _previousPlayerBehavior = PlayerBehavior.Nothing;
   public unsafe List<sbyte> GetCurrentPlots()
   {
 #if SAVE_MODE
@@ -88,27 +91,55 @@ public class PlotService(ILogger _logger, IClientState _clientState, IDalamudPlu
     if (CurrentWard == -1) return [];
     if (_objectTable.LocalPlayer == null) return [];
 
-    Vector2 position = new(_objectTable.LocalPlayer.Position.X, _objectTable.LocalPlayer.Position.Z);
-    if (_lastPosition == position) return _lastPlots;
-    _lastPosition = position;
+    List<(Vector2, uint)> positions = [];
+    foreach (IBattleChara player in _objectTable.PlayerObjects)
+    {
+      if (_configuration.PlayerBehavior != PlayerBehavior.Nothing || _previousPlayerBehavior != _configuration.PlayerBehavior || player.EntityId == _objectTable.LocalPlayer.EntityId)
+      {
+        positions.Add((new(player.Position.X, player.Position.Z), player.EntityId));
+        ((GameObject*)player.Address)->RenderFlags &= ~(VisibilityFlags.Model | VisibilityFlags.Nameplate);
+      }
+    }
+
+    if (positions.SequenceEqual(_lastPositions) && _configuration.PlayerBehavior == _previousPlayerBehavior && _configuration.PlayerBehavior != PlayerBehavior.HidePlayers) return _lastPlots;
+    _lastPositions = positions;
+    _previousPlayerBehavior = _configuration.PlayerBehavior;
 
     _plots.TryGetValue((CurrentDistrict, CurrentDivision), out List<Plot>? plots);
     if (plots == null) return [_housingManager->GetCurrentPlot()];
 
+    List<sbyte> localPlayerPlots = [];
     List<sbyte> currentPlots = [];
-    foreach (Plot plot in plots)
+    foreach ((Vector2 position, uint entityId) in positions)
     {
-      if (plot.IsInside(position, 7.5f))
+      foreach (Plot plot in plots)
       {
-        currentPlots.Add(plot.PlotId);
+        if (plot.IsInside(position, 3.5f))
+        {
+          if (_configuration.PlayerBehavior == PlayerBehavior.HidePlayers && _objectTable.LocalPlayer.EntityId != entityId)
+          {
+            IGameObject gameObject = _objectTable.First((o) => o.EntityId == entityId);
+            if (gameObject != null && !localPlayerPlots.Contains(plot.PlotId))
+            {
+              ((GameObject*)gameObject.Address)->RenderFlags |= VisibilityFlags.Model | VisibilityFlags.Nameplate;
+            }
+          }
+          else
+          {
+            if (_objectTable.LocalPlayer.EntityId == entityId)
+            {
+              localPlayerPlots.Add(plot.PlotId);
+            }
+
+            currentPlots.Add(plot.PlotId);
+          }
+        }
       }
     }
 
+    // Always also add this as a fallback.
+    currentPlots.Add(_housingManager->GetCurrentPlot());
     _lastPlots = currentPlots;
-    if (_lastPlots.Count == 0)
-    {
-      _lastPlots = [_housingManager->GetCurrentPlot()];
-    }
 
     return _lastPlots;
   }
@@ -201,8 +232,8 @@ public class Plot
     Vector2[] corners = [C1, C2, C3, C4];
 
     Vector2 center = new(
-        (corners[0].X + corners[1].X + corners[2].X + corners[3].X) / 4,
-        (corners[0].Y + corners[1].Y + corners[2].Y + corners[3].Y) / 4
+      (corners[0].X + corners[1].X + corners[2].X + corners[3].X) / 4,
+      (corners[0].Y + corners[1].Y + corners[2].Y + corners[3].Y) / 4
     );
 
     Vector2[] paddedCorners = new Vector2[4];

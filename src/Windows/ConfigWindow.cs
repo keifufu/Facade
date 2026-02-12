@@ -18,6 +18,7 @@ public class ConfigWindow(ILogger _logger, Configuration _configuration, IExteri
   private DateTime _lastImport = new();
   private List<Facade> _importingFacades = [];
 
+  public bool SettingsOpen = false;
   public bool OverlayOpen = false;
 
   // Took the most recent events as the older ones don't have models for newer districts.
@@ -196,13 +197,25 @@ public class ConfigWindow(ILogger _logger, Configuration _configuration, IExteri
 
   public override void Draw()
   {
+    TitleBarButtons = [
+      new()
+      {
+        Icon = SettingsOpen ? FontAwesomeIcon.Home : FontAwesomeIcon.Cog,
+        ShowTooltip = () => ImGui.SetTooltip(SettingsOpen ? "Facades" : "Settings"),
+        Click = (btn) => SettingsOpen = !SettingsOpen,
+      },
+    ];
+
     SizeConstraints = new()
     {
-      MinimumSize = new(300),
+      MinimumSize = new(300, SettingsOpen ? 0 : 300),
       MaximumSize = new(300, (_addingFacade || _editingFacade != null) && !_unitedExteriorSelection ? 999 : 300)
     };
 
     using IDisposable _ = _uiFont.Push();
+
+    if (DrawSettings()) return;
+
     if (DrawEditScreen())
     {
       DrawOverlay();
@@ -307,6 +320,46 @@ public class ConfigWindow(ILogger _logger, Configuration _configuration, IExteri
     }
 
     DrawOverlay();
+  }
+
+  private bool DrawSettings()
+  {
+    if (!SettingsOpen) return false;
+
+    ImGui.TextWrapped("When other players are on Facade plots:");
+    ImGui.Dummy(ScaledVector2(0, 5));
+
+    if (ImGui.RadioButton("Do Nothing", _configuration.PlayerBehavior == PlayerBehavior.Nothing))
+    {
+      _configuration.PlayerBehavior = PlayerBehavior.Nothing;
+      _configuration.Save();
+    }
+
+    if (ImGui.IsItemHovered())
+      using (ImRaii.Tooltip())
+        ImGui.Text("Players might clip or float on the Facade.");
+
+    if (ImGui.RadioButton("Reset Facade", _configuration.PlayerBehavior == PlayerBehavior.ResetFacade))
+    {
+      _configuration.PlayerBehavior = PlayerBehavior.ResetFacade;
+      _configuration.Save();
+    }
+
+    if (ImGui.IsItemHovered())
+      using (ImRaii.Tooltip())
+        ImGui.Text("Facade plots will be reset when players are on it.");
+
+    if (ImGui.RadioButton("Hide Players", _configuration.PlayerBehavior == PlayerBehavior.HidePlayers))
+    {
+      _configuration.PlayerBehavior = PlayerBehavior.HidePlayers;
+      _configuration.Save();
+    }
+
+    if (ImGui.IsItemHovered())
+      using (ImRaii.Tooltip())
+        ImGui.Text("Players on a Facade plot will be hidden.");
+
+    return true;
   }
 
   private uint ABGRtoARGB(uint color) => ((color & 0xFF) << 16) | ((color >> 16) & 0xFF) | (color & 0xFF00) | 0xFF000000;
@@ -426,10 +479,10 @@ public class ConfigWindow(ILogger _logger, Configuration _configuration, IExteri
       {
         if (!table.Success) return;
 
-        ImGui.TableSetupColumn("", ImGuiTableColumnFlags.WidthFixed, ScaledFloat(40));
-        ImGui.TableSetupColumn("", ImGuiTableColumnFlags.WidthFixed, ScaledFloat(40));
-        ImGui.TableSetupColumn("", ImGuiTableColumnFlags.WidthStretch);
-        ImGui.TableSetupColumn("", ImGuiTableColumnFlags.WidthFixed, ScaledFloat(40));
+        ImGui.TableSetupColumn("##icon", ImGuiTableColumnFlags.WidthFixed, ScaledFloat(40));
+        ImGui.TableSetupColumn("##stain", ImGuiTableColumnFlags.WidthFixed, ScaledFloat(40));
+        ImGui.TableSetupColumn("##plot", ImGuiTableColumnFlags.WidthStretch);
+        ImGui.TableSetupColumn("##action", ImGuiTableColumnFlags.WidthFixed, ScaledFloat(40));
 
         foreach (Facade facade in facades)
         {
@@ -668,7 +721,7 @@ public class ConfigWindow(ILogger _logger, Configuration _configuration, IExteri
       if (!table.Success) return;
 
       ImGui.TableSetupColumn("Name", ImGuiTableColumnFlags.WidthStretch);
-      ImGui.TableSetupColumn("", ImGuiTableColumnFlags.WidthFixed, ScaledFloat(40));
+      ImGui.TableSetupColumn("##action", ImGuiTableColumnFlags.WidthFixed, ScaledFloat(40));
 
       foreach (Preset preset in _configuration.Presets)
       {

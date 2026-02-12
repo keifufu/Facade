@@ -3,7 +3,7 @@ namespace Facade.Services;
 public interface ICommandService : IHostedService;
 
 #pragma warning disable CS9113
-public class CommandService(ILogger _logger, ConfigWindow _configWindow, ICommandManager _commandManager, IPlotService _plotService) : ICommandService
+public class CommandService(ILogger _logger, ConfigWindow _configWindow, ICommandManager _commandManager, IPlotService _plotService, IDalamudPluginInterface _pluginInterface) : ICommandService
 {
   private const string FacadeCommand = "/facade";
 
@@ -33,6 +33,7 @@ public class CommandService(ILogger _logger, ConfigWindow _configWindow, IComman
     string[] args = arguments.Split(" ", StringSplitOptions.RemoveEmptyEntries);
     if (args.Length == 0)
     {
+      _configWindow.SettingsOpen = false;
       _configWindow.OverlayOpen = false;
       _configWindow.Toggle();
       return;
@@ -49,7 +50,7 @@ public class CommandService(ILogger _logger, ConfigWindow _configWindow, IComman
         break;
 #endif
       case "version":
-        _logger.Chat($"v{Assembly.GetExecutingAssembly()?.GetName()?.Version?.ToString() ?? "0.0.0.0"}");
+        _logger.Chat($"v{_pluginInterface.Manifest.AssemblyVersion}");
         break;
       case "help":
       case "?":
