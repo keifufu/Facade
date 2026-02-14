@@ -10,7 +10,7 @@ public class WindowService(ILogger _logger, ConfigWindow _configWindow, WindowSy
 
     _pluginInterface.UiBuilder.DisableCutsceneUiHide = true;
     _pluginInterface.UiBuilder.Draw += UiBuilderOnDraw;
-    _pluginInterface.UiBuilder.OpenConfigUi += ToggleConfigUi;
+    _pluginInterface.UiBuilder.OpenConfigUi += ToggleSettingsUi;
     _pluginInterface.UiBuilder.OpenMainUi += ToggleConfigUi;
 
 #if DEBUG
@@ -23,7 +23,7 @@ public class WindowService(ILogger _logger, ConfigWindow _configWindow, WindowSy
 
   public Task StopAsync(CancellationToken cancellationToken)
   {
-    _pluginInterface.UiBuilder.OpenConfigUi -= ToggleConfigUi;
+    _pluginInterface.UiBuilder.OpenConfigUi -= ToggleSettingsUi;
     _pluginInterface.UiBuilder.OpenMainUi -= ToggleConfigUi;
     _pluginInterface.UiBuilder.Draw -= UiBuilderOnDraw;
 
@@ -33,11 +33,32 @@ public class WindowService(ILogger _logger, ConfigWindow _configWindow, WindowSy
     return Task.CompletedTask;
   }
 
+  private void ToggleSettingsUi()
+  {
+    if (_configWindow.IsOpen && !_configWindow.SettingsOpen)
+    {
+      _configWindow.SettingsOpen = true;
+    }
+    else
+    {
+      _configWindow.SettingsOpen = true;
+      _configWindow.OverlayOpen = false;
+      _configWindow.Toggle();
+    }
+  }
+
   private void ToggleConfigUi()
   {
-    _configWindow.SettingsOpen = false;
-    _configWindow.OverlayOpen = false;
-    _configWindow.Toggle();
+    if (_configWindow.IsOpen && _configWindow.SettingsOpen)
+    {
+      _configWindow.SettingsOpen = false;
+    }
+    else
+    {
+      _configWindow.SettingsOpen = false;
+      _configWindow.OverlayOpen = false;
+      _configWindow.Toggle();
+    }
   }
 
   private void UiBuilderOnDraw()

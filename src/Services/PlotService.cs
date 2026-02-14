@@ -81,6 +81,7 @@ public class PlotService(ILogger _logger, Configuration _configuration, IClientS
   private List<(Vector2, uint)> _lastPositions = [];
   private List<sbyte> _lastPlots = [];
   private PlayerBehavior _previousPlayerBehavior = PlayerBehavior.Nothing;
+  private readonly List<uint> _hiddenPlayers = [];
   public unsafe List<sbyte> GetCurrentPlots(bool reset = false)
   {
 #if SAVE_MODE
@@ -97,7 +98,11 @@ public class PlotService(ILogger _logger, Configuration _configuration, IClientS
       if (_configuration.PlayerBehavior != PlayerBehavior.Nothing || _previousPlayerBehavior != _configuration.PlayerBehavior || player.EntityId == _objectTable.LocalPlayer.EntityId || reset)
       {
         positions.Add((new(player.Position.X, player.Position.Z), player.EntityId));
-        ((GameObject*)player.Address)->RenderFlags &= ~(VisibilityFlags.Model | VisibilityFlags.Nameplate);
+        if (_hiddenPlayers.Contains(player.EntityId))
+        {
+          ((GameObject*)player.Address)->RenderFlags &= ~(VisibilityFlags.Model | VisibilityFlags.Nameplate);
+          _hiddenPlayers.Remove(player.EntityId);
+        }
       }
     }
 
@@ -122,6 +127,7 @@ public class PlotService(ILogger _logger, Configuration _configuration, IClientS
             if (gameObject != null && !localPlayerPlots.Contains(plot.PlotId) && !reset)
             {
               ((GameObject*)gameObject.Address)->RenderFlags |= VisibilityFlags.Model | VisibilityFlags.Nameplate;
+              _hiddenPlayers.Add(gameObject.EntityId);
             }
           }
           else
