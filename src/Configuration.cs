@@ -61,6 +61,7 @@ public class Configuration : IPluginConfiguration
   public List<FestivalFacade> FestivalFacades { get; set; } = [];
   public List<Preset> Presets { get; set; } = [];
   public PlayerBehavior PlayerBehavior { get; set; } = PlayerBehavior.Nothing;
+  public bool Foolery { get; set; } = true;
 
   [NonSerialized]
   private IDalamudPluginInterface? PluginInterface;

@@ -2,6 +2,7 @@ namespace Facade.Services;
 
 public interface IExteriorService : IHostedService
 {
+  Foolery ActiveFoolery { get; }
   event EventHandler? OnDivisionChange;
   PlotSize? GetPlotSize(sbyte plot);
   short? GetPlotExterior(sbyte plot, ExteriorItemType type);
@@ -26,6 +27,22 @@ public class ExteriorService(ILogger _logger, Configuration _configuration, IPlo
   private List<sbyte> _lastPlots = [];
 
   private District _lastDistrict = District.Invalid;
+  private Foolery _lastFoolery = Foolery.None;
+
+  public Foolery ActiveFoolery
+  {
+    get
+    {
+      if (!_configuration.Foolery) return Foolery.None;
+      DateTime today = DateTime.Now;
+      return (today.Month, today.Day) switch
+      {
+        (4, 1) => Foolery.AprilFools,
+        (12, 24) => Foolery.Christmas,
+        _ => Foolery.None
+      };
+    }
+  }
 
   public unsafe PlotSize? GetPlotSize(sbyte plot)
   {
@@ -78,11 +95,12 @@ public class ExteriorService(ILogger _logger, Configuration _configuration, IPlo
 #endif
 
     bool shouldUpdateExteriors = false;
+    bool shouldUpdateFestival = false;
 
     if (_plotService.CurrentDistrict != _lastDistrict || _plotService.CurrentWard != _lastWard)
     {
       _originalFestival.Clear();
-      UpdateFestival();
+      shouldUpdateFestival = true;
     }
 
     if (_plotService.CurrentDistrict != _lastDistrict || _plotService.CurrentWard != _lastWard || _plotService.CurrentDivision != _lastDivision)
@@ -110,35 +128,81 @@ public class ExteriorService(ILogger _logger, Configuration _configuration, IPlo
       shouldUpdateExteriors = true;
     }
 
+    if (ActiveFoolery != _lastFoolery)
+    {
+      _lastFoolery = ActiveFoolery;
+      shouldUpdateExteriors = true;
+      shouldUpdateFestival = true;
+    }
+
+    if (shouldUpdateFestival) UpdateFestival();
     if (shouldUpdateExteriors) UpdateExteriors(false, currentPlots);
   }
 
   public IEnumerable<Facade> GetCurrentFacades()
   {
 #if SAVE_MODE
-    List<Facade> facades = [];
-    for (int i = _plotService.DivisionMin; i < _plotService.DivisionMax; i++)
+  return Enumerable.Range(_plotService.DivisionMin, _plotService.DivisionMax - _plotService.DivisionMin)
+    .Select(i => new Facade
     {
-      facades.Add(new()
-      {
-        World = _plotService.CurrentWorld,
-        District = _plotService.CurrentDistrict,
-        IsUnitedExterior = false,
-        PackedExteriorIds = UInt128.Parse("15976697433711664612988337205245378560"),
-        PackedStainIds = 0,
-        Ward = _plotService.CurrentWard,
-        Plot = (sbyte)i,
-      });
-    }
-    return facades;
+      World = _plotService.CurrentWorld,
+      District = _plotService.CurrentDistrict,
+      IsUnitedExterior = false,
+      PackedExteriorIds = UInt128.Parse("15976697433711664612988337205245378560"),
+      PackedStainIds = 0,
+      Ward = _plotService.CurrentWard,
+      Plot = (sbyte)i,
+    });
 #pragma warning disable CS0162
 #endif
 
-    return _configuration.Facades.Where(facade => facade.World == _plotService.CurrentWorld && facade.District == _plotService.CurrentDistrict && facade.Ward == _plotService.CurrentWard && facade.Plot >= _plotService.DivisionMin && facade.Plot < _plotService.DivisionMax);
+    switch (ActiveFoolery)
+    {
+      case Foolery.AprilFools:
+        return Enumerable.Range(_plotService.DivisionMin, _plotService.DivisionMax - _plotService.DivisionMin)
+          .Select(i => new Facade
+          {
+            World = _plotService.CurrentWorld,
+            District = _plotService.CurrentDistrict,
+            IsUnitedExterior = false,
+            PackedExteriorIds = 0,
+            PackedStainIds = 0,
+            Ward = _plotService.CurrentWard,
+            Plot = (sbyte)i,
+          });
+      case Foolery.Christmas:
+        UInt128 getFacade(sbyte plot)
+        {
+          PlotSize? plotSize = GetPlotSize(plot);
+          return plotSize switch
+          {
+            PlotSize.Small => UInt128.Parse("16143016128900140767595426867352700013"),
+            PlotSize.Medium => UInt128.Parse("16143016128900140767595426867352765550"),
+            PlotSize.Large => UInt128.Parse("16143016128900140767595426867352831087"),
+            _ => (UInt128)0,
+          };
+        }
+
+        return Enumerable.Range(_plotService.DivisionMin, _plotService.DivisionMax - _plotService.DivisionMin)
+          .Select(i => new Facade
+          {
+            World = _plotService.CurrentWorld,
+            District = _plotService.CurrentDistrict,
+            IsUnitedExterior = false,
+            PackedExteriorIds = getFacade((sbyte)i),
+            PackedStainIds = 0,
+            Ward = _plotService.CurrentWard,
+            Plot = (sbyte)i,
+          });
+      default:
+        return _configuration.Facades.Where(facade => facade.World == _plotService.CurrentWorld && facade.District == _plotService.CurrentDistrict && facade.Ward == _plotService.CurrentWard && facade.Plot >= _plotService.DivisionMin && facade.Plot < _plotService.DivisionMax);
+    }
   }
 
   public FestivalFacade? GetCurrentFestivalFacade()
   {
+    if (ActiveFoolery != Foolery.None) return null;
+
     return _configuration.FestivalFacades.FirstOrDefault(facade => facade.World == _plotService.CurrentWorld && facade.District == _plotService.CurrentDistrict && facade.Ward == _plotService.CurrentWard);
   }
 
@@ -304,4 +368,11 @@ public enum ExteriorItemType : ushort
   Fence = 7,
   UnitedExterior = 8,
   UnitedExteriorPreset = 9
+}
+
+public enum Foolery
+{
+  None,
+  AprilFools,
+  Christmas
 }

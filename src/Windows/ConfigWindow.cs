@@ -222,7 +222,7 @@ public class ConfigWindow(ILogger _logger, Configuration _configuration, IExteri
       return;
     }
 
-    bool buttonsDisabled = _plotService.CurrentDivision == 0;
+    bool buttonsDisabled = _plotService.CurrentDivision == 0 || _exteriorService.ActiveFoolery != Foolery.None;
     bool buttonsDisabledFestivalView = buttonsDisabled || _festivalView;
     bool buttonsHovered = false;
     using (ImRaii.PushStyle(ImGuiStyleVar.Alpha, ImGui.GetStyle().Alpha * 0.5f, buttonsDisabled))
@@ -307,7 +307,7 @@ public class ConfigWindow(ILogger _logger, Configuration _configuration, IExteri
       {
         using (ImRaii.Tooltip())
         {
-          ImGui.Text("Visit the division you want to modify an exterior in first.");
+          ImGui.Text(_exteriorService.ActiveFoolery != Foolery.None ? "Controlled by Foolery" : "Visit the division you want to modify an exterior in first.");
         }
       }
     }
@@ -358,6 +358,22 @@ public class ConfigWindow(ILogger _logger, Configuration _configuration, IExteri
     if (ImGui.IsItemHovered())
       using (ImRaii.Tooltip())
         ImGui.Text("Players on a Facade plot will be hidden.");
+
+    ImGui.Dummy(ScaledVector2(0, 5));
+
+    if (!_configuration.Foolery || _exteriorService.ActiveFoolery != Foolery.None)
+    {
+      bool foolery = _configuration.Foolery;
+      if (ImGui.Checkbox($"Foolery", ref foolery))
+      {
+        _configuration.Foolery = foolery;
+        _configuration.Save();
+      }
+
+      if (ImGui.IsItemHovered())
+        using (ImRaii.Tooltip())
+          ImGui.Text("Special behavior on certain days.");
+    }
 
     return true;
   }
@@ -467,7 +483,15 @@ public class ConfigWindow(ILogger _logger, Configuration _configuration, IExteri
 
     ImGui.Dummy(ScaledVector2(1));
 
-    if (facades.Count() == 0)
+    if (_exteriorService.ActiveFoolery != Foolery.None)
+    {
+      DrawCenteredText("Facades are being controlled by Foolery.", true, false);
+      if (ImGui.IsItemHovered())
+        using (ImRaii.Tooltip())
+          ImGui.Text($"Today is {_exteriorService.ActiveFoolery}. You can turn this off in the settings.");
+      return;
+    }
+    else if (facades.Count() == 0)
     {
       DrawCenteredText("There are no Facades in your current division.", true, false);
     }
