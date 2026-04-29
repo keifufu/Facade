@@ -4,7 +4,7 @@ namespace Facade;
 
 [Serializable]
 // TerritoryType
-public enum District : ushort
+public enum District : uint
 {
   Mist = 339,
   LavenderBeds = 340,

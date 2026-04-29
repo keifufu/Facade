@@ -129,7 +129,7 @@ public class ConfigWindow(ILogger _logger, Configuration _configuration, IExteri
     {
       float fontPx = UiBuilder.DefaultFontSizePx;
       SafeFontConfig safeFontConfig = new() { SizePx = fontPx };
-      tk.AddDalamudAssetFont(Dalamud.DalamudAsset.NotoSansJpMedium, safeFontConfig);
+      tk.AddDalamudAssetFont(Dalamud.DalamudAsset.NotoSansCjkMedium, safeFontConfig);
       tk.AttachExtraGlyphsForDalamudLanguage(safeFontConfig);
     });
   });
@@ -312,7 +312,7 @@ public class ConfigWindow(ILogger _logger, Configuration _configuration, IExteri
       }
     }
 
-    using (ImRaii.IEndObject child = ImRaii.Child("##facadeList"))
+    using (ImRaii.ChildDisposable child = ImRaii.Child("##facadeList"))
     {
       if (!child.Success) return;
       if (_festivalView) DrawFestivalFacadeList();
@@ -418,7 +418,7 @@ public class ConfigWindow(ILogger _logger, Configuration _configuration, IExteri
       Festival currentFestival = _festivals.Find(festival => festival.Id == currentFestivalId);
 
       ImGui.SetNextItemWidth(ImGui.GetContentRegionAvail().X);
-      using (ImRaii.IEndObject combo = ImRaii.Combo("###festivalCombo", currentFestival.Name))
+      using (ImRaii.ComboDisposable combo = ImRaii.Combo("###festivalCombo", currentFestival.Name))
       {
         if (combo.Success)
         {
@@ -499,7 +499,7 @@ public class ConfigWindow(ILogger _logger, Configuration _configuration, IExteri
     {
       using (ImRaii.PushColor(ImGuiCol.TableBorderStrong, ImGui.GetStyle().Colors[(int)ImGuiCol.TextDisabled]))
       using (ImRaii.PushColor(ImGuiCol.TableBorderLight, ImGui.GetStyle().Colors[(int)ImGuiCol.TextDisabled]))
-      using (ImRaii.IEndObject table = ImRaii.Table("facadeTable", 4, ImGuiTableFlags.Borders | ImGuiTableFlags.RowBg))
+      using (ImRaii.TableDisposable table = ImRaii.Table("facadeTable", 4, ImGuiTableFlags.Borders | ImGuiTableFlags.RowBg))
       {
         if (!table.Success) return;
 
@@ -582,7 +582,7 @@ public class ConfigWindow(ILogger _logger, Configuration _configuration, IExteri
 
     using (ImRaii.PushColor(ImGuiCol.ChildBg, overlayColor))
     {
-      using (ImRaii.IEndObject overlay = ImRaii.Child("##overlay", windowSize, false))
+      using (ImRaii.ChildDisposable overlay = ImRaii.Child("##overlay", windowSize, false))
       {
         if (!overlay.Success) return;
 
@@ -594,7 +594,7 @@ public class ConfigWindow(ILogger _logger, Configuration _configuration, IExteri
 
         using (ImRaii.PushColor(ImGuiCol.ChildBg, childColor))
         {
-          using (ImRaii.IEndObject child = ImRaii.Child("##facadeLocation", childSize, false, ImGuiWindowFlags.AlwaysUseWindowPadding))
+          using (ImRaii.ChildDisposable child = ImRaii.Child("##facadeLocation", childSize, false, ImGuiWindowFlags.AlwaysUseWindowPadding))
           {
             if (!child.Success) return;
             if (_overlayContent == OverlayContent.FacadeLocations) DrawFacadeLocations();
@@ -740,7 +740,7 @@ public class ConfigWindow(ILogger _logger, Configuration _configuration, IExteri
 
     using (ImRaii.PushColor(ImGuiCol.TableBorderStrong, ImGui.GetStyle().Colors[(int)ImGuiCol.TextDisabled]))
     using (ImRaii.PushColor(ImGuiCol.TableBorderLight, ImGui.GetStyle().Colors[(int)ImGuiCol.TextDisabled]))
-    using (ImRaii.IEndObject table = ImRaii.Table("##presetTable", 2, ImGuiTableFlags.Borders | ImGuiTableFlags.RowBg))
+    using (ImRaii.TableDisposable table = ImRaii.Table("##presetTable", 2, ImGuiTableFlags.Borders | ImGuiTableFlags.RowBg))
     {
       if (!table.Success) return;
 
@@ -815,7 +815,7 @@ public class ConfigWindow(ILogger _logger, Configuration _configuration, IExteri
   {
     using (ImRaii.PushColor(ImGuiCol.TableBorderStrong, ImGui.GetStyle().Colors[(int)ImGuiCol.TextDisabled]))
     using (ImRaii.PushColor(ImGuiCol.TableBorderLight, ImGui.GetStyle().Colors[(int)ImGuiCol.TextDisabled]))
-    using (ImRaii.IEndObject table = ImRaii.Table("##facadeLocationsTable", _festivalView ? 3 : 4, ImGuiTableFlags.Borders | ImGuiTableFlags.RowBg))
+    using (ImRaii.TableDisposable table = ImRaii.Table("##facadeLocationsTable", _festivalView ? 3 : 4, ImGuiTableFlags.Borders | ImGuiTableFlags.RowBg))
     {
       if (!table.Success) return;
 
@@ -1053,7 +1053,7 @@ public class ConfigWindow(ILogger _logger, Configuration _configuration, IExteri
   {
     IEnumerable<Facade> facades = _exteriorService.GetCurrentFacades();
     ImGui.SetNextItemWidth(ImGui.GetContentRegionAvail().X);
-    using (ImRaii.IEndObject dropdown = ImRaii.Combo("##PlotSelect", _selectedPlot == null ? "Select Plot" : _selectedPlot.ToString()))
+    using (ImRaii.ComboDisposable dropdown = ImRaii.Combo("##PlotSelect", _selectedPlot == null ? "Select Plot" : _selectedPlot.ToString()))
     {
       if (!dropdown.Success) return;
       for (int i = _plotService.DivisionMin + 1; i < _plotService.DivisionMax + 1; i++)
@@ -1153,7 +1153,7 @@ public class ConfigWindow(ILogger _logger, Configuration _configuration, IExteri
       onSelect(text, 0, null);
     }
 
-    using (ImRaii.IEndObject dropdown = ImRaii.Combo($"##ExteriorSelect{text}", selectedExteriorItemName ?? (exterior == 0 ? $"No {text}" : _unitedExteriorSelection ? $"Existing {text}" : plotExteriorItem != null && plotExteriorItem.HasValue ? plotExteriorItem.Value.Name.ToString() : $"Select {text}...")))
+    using (ImRaii.ComboDisposable dropdown = ImRaii.Combo($"##ExteriorSelect{text}", selectedExteriorItemName ?? (exterior == 0 ? $"No {text}" : _unitedExteriorSelection ? $"Existing {text}" : plotExteriorItem != null && plotExteriorItem.HasValue ? plotExteriorItem.Value.Name.ToString() : $"Select {text}...")))
     {
       if (!dropdown.Success) return invalidSelection;
 
@@ -1262,7 +1262,7 @@ public class ConfigWindow(ILogger _logger, Configuration _configuration, IExteri
     Stain? selectedStain = _dataManager.GetExcelSheet<Stain>().GetRowOrDefault(stain ?? 0);
     string selectedStainString = stain == null || selectedStain == null || !selectedStain.HasValue ? text.IsNullOrEmpty() ? "Existing Color" : $"Existing {text} Color" : selectedStain.Value.RowId == 0 ? $"Undyed {text}" : $"{selectedStain.Value.Name} {text}";
     ImGui.SetNextItemWidth(ImGui.GetContentRegionAvail().X);
-    using (ImRaii.IEndObject dropdown = ImRaii.Combo($"##StainSelect{text}", selectedStainString))
+    using (ImRaii.ComboDisposable dropdown = ImRaii.Combo($"##StainSelect{text}", selectedStainString))
     {
       if (!dropdown.Success) return;
 
