@@ -46,16 +46,16 @@ public class ConfigWindow(ILogger _logger, Configuration _configuration, IExteri
     {
       if (_cachedExteriorItems.Count > 0) return _cachedExteriorItems;
 
-      IEnumerable<Item> items = _dataManager.GetExcelSheet<Item>().Where(item => item.AdditionalData.RowId != 0 && item.ItemSearchCategory.RowId == 65);
+      IEnumerable<Item> items = _dataManager.GetExcelSheet<Item>(ClientLanguage.English).Where(item => item.AdditionalData.RowId != 0 && item.ItemSearchCategory.RowId == 65);
       foreach (Item item in items)
       {
-        if (_dataManager.GetExcelSheet<HousingPreset>().TryGetRow(item.AdditionalData.RowId, out HousingPreset housingPreset))
+        if (_dataManager.GetExcelSheet<HousingPreset>(ClientLanguage.English).TryGetRow(item.AdditionalData.RowId, out HousingPreset housingPreset))
         {
           if (housingPreset.Singular.IsEmpty) continue;
-          if (!_dataManager.GetExcelSheet<Item>().TryGetRow(housingPreset.ExteriorRoof.RowId, out Item roofItem)) continue;
-          if (!_dataManager.GetExcelSheet<Item>().TryGetRow(housingPreset.ExteriorWall.RowId, out Item wallItem)) continue;
-          if (!_dataManager.GetExcelSheet<Item>().TryGetRow(housingPreset.ExteriorWindow.RowId, out Item windowItem)) continue;
-          if (!_dataManager.GetExcelSheet<Item>().TryGetRow(housingPreset.ExteriorDoor.RowId, out Item doorItem)) continue;
+          if (!_dataManager.GetExcelSheet<Item>(ClientLanguage.English).TryGetRow(housingPreset.ExteriorRoof.RowId, out Item roofItem)) continue;
+          if (!_dataManager.GetExcelSheet<Item>(ClientLanguage.English).TryGetRow(housingPreset.ExteriorWall.RowId, out Item wallItem)) continue;
+          if (!_dataManager.GetExcelSheet<Item>(ClientLanguage.English).TryGetRow(housingPreset.ExteriorWindow.RowId, out Item windowItem)) continue;
+          if (!_dataManager.GetExcelSheet<Item>(ClientLanguage.English).TryGetRow(housingPreset.ExteriorDoor.RowId, out Item doorItem)) continue;
 
           UInt128 packedId = UInt128Extensions.Pack(
             (ushort)roofItem.AdditionalData.RowId,
@@ -80,7 +80,7 @@ public class ConfigWindow(ILogger _logger, Configuration _configuration, IExteri
             UnitedExteriorId = null
           });
         }
-        else if (_dataManager.GetExcelSheet<HousingExterior>().TryGetRow(item.AdditionalData.RowId, out HousingExterior housingExterior))
+        else if (_dataManager.GetExcelSheet<HousingExterior>(ClientLanguage.English).TryGetRow(item.AdditionalData.RowId, out HousingExterior housingExterior))
         {
           _cachedExteriorItems.Add(new()
           {
@@ -92,7 +92,7 @@ public class ConfigWindow(ILogger _logger, Configuration _configuration, IExteri
             UnitedExteriorId = null
           });
         }
-        else if (_dataManager.GetExcelSheet<HousingUnitedExterior>().TryGetRow(item.AdditionalData.RowId, out HousingUnitedExterior housingUnitedExterior))
+        else if (_dataManager.GetExcelSheet<HousingUnitedExterior>(ClientLanguage.English).TryGetRow(item.AdditionalData.RowId, out HousingUnitedExterior housingUnitedExterior))
         {
           UInt128 packedId = UInt128Extensions.Pack(
             (ushort)housingUnitedExterior.Roof.RowId,
@@ -396,7 +396,7 @@ public class ConfigWindow(ILogger _logger, Configuration _configuration, IExteri
   {
     string stainName = "Existing Color";
     uint stainColor = ColorHelpers.RgbaVector4ToUint(ImGui.GetStyle().Colors[(int)ImGuiCol.WindowBg]);
-    if (stain != null && _dataManager.GetExcelSheet<Stain>().TryGetRow((uint)stain, out Stain stainRow))
+    if (stain != null && _dataManager.GetExcelSheet<Stain>(ClientLanguage.English).TryGetRow((uint)stain, out Stain stainRow))
     {
       stainName = stainRow.RowId == 0 ? "Undyed" : stainRow.Name.ToString();
       stainColor = ABGRtoARGB(stainRow.Color);
@@ -615,7 +615,7 @@ public class ConfigWindow(ILogger _logger, Configuration _configuration, IExteri
   {
     if (_importingFacades.Count == 0) return;
     Facade probedFacade = _importingFacades[0];
-    if (!_dataManager.GetExcelSheet<World>().TryGetRow(probedFacade.World, out World world)) return;
+    if (!_dataManager.GetExcelSheet<World>(ClientLanguage.English).TryGetRow(probedFacade.World, out World world)) return;
 
     int division = probedFacade.Plot > 30 ? 2 : 1;
     ImGui.Text("Importing Facades for:");
@@ -831,7 +831,7 @@ public class ConfigWindow(ILogger _logger, Configuration _configuration, IExteri
 
         foreach (FestivalFacade festivalFacade in festivalFacades)
         {
-          if (!_dataManager.GetExcelSheet<World>().TryGetRow(festivalFacade.World, out World world)) continue;
+          if (!_dataManager.GetExcelSheet<World>(ClientLanguage.English).TryGetRow(festivalFacade.World, out World world)) continue;
 
           ImGui.TableNextRow();
           ImGui.TableNextColumn();
@@ -854,7 +854,7 @@ public class ConfigWindow(ILogger _logger, Configuration _configuration, IExteri
         foreach (var group in facades)
         {
           Facade facade = group.Facade;
-          if (!_dataManager.GetExcelSheet<World>().TryGetRow(facade.World, out World world)) continue;
+          if (!_dataManager.GetExcelSheet<World>(ClientLanguage.English).TryGetRow(facade.World, out World world)) continue;
 
           ImGui.TableNextRow();
           ImGui.TableNextColumn();
@@ -1259,7 +1259,7 @@ public class ConfigWindow(ILogger _logger, Configuration _configuration, IExteri
 
   private void DrawSingularStainDropdown(ushort? stain, string text, Action<string, ushort?> onSelect)
   {
-    Stain? selectedStain = _dataManager.GetExcelSheet<Stain>().GetRowOrDefault(stain ?? 0);
+    Stain? selectedStain = _dataManager.GetExcelSheet<Stain>(ClientLanguage.English).GetRowOrDefault(stain ?? 0);
     string selectedStainString = stain == null || selectedStain == null || !selectedStain.HasValue ? text.IsNullOrEmpty() ? "Existing Color" : $"Existing {text} Color" : selectedStain.Value.RowId == 0 ? $"Undyed {text}" : $"{selectedStain.Value.Name} {text}";
     ImGui.SetNextItemWidth(ImGui.GetContentRegionAvail().X);
     using (ImRaii.ComboDisposable dropdown = ImRaii.Combo($"##StainSelect{text}", selectedStainString))
@@ -1274,7 +1274,7 @@ public class ConfigWindow(ILogger _logger, Configuration _configuration, IExteri
         onSelect(text, null);
       }
 
-      foreach (Stain stainRow in _dataManager.GetExcelSheet<Stain>())
+      foreach (Stain stainRow in _dataManager.GetExcelSheet<Stain>(ClientLanguage.English))
       {
         if (stainRow.Name.IsEmpty || !stainRow.IsHousingApplicable) continue;
 
