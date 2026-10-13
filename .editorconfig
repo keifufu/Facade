@@ -26,6 +26,8 @@ dotnet_diagnostic.IDE0072.severity = none
 dotnet_diagnostic.IDE0130.severity = none
 dotnet_diagnostic.IDE0305.severity = none
 
+dotnet_diagnostic.SYSLIB1045.severity = none
+
 csharp_prefer_braces = when_multiline
 csharp_style_namespace_declarations = file_scoped
 csharp_style_expression_bodied_methods = when_on_single_line
