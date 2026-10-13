@@ -236,11 +236,11 @@ public class SimplePlot
 
 public class Plot
 {
-  public sbyte PlotId;
-  public Vector2 C1;
-  public Vector2 C2;
-  public Vector2 C3;
-  public Vector2 C4;
+  public sbyte PlotId { get; init; }
+  public Vector2 C1 { get; init; }
+  public Vector2 C2 { get; init; }
+  public Vector2 C3 { get; init; }
+  public Vector2 C4 { get; init; }
 
   public bool IsInside(Vector2 position, float padding)
   {
