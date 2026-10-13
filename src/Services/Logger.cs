@@ -1,65 +1,57 @@
-using Dalamud.Game.Gui.Toast;
 using Dalamud.Game.Text.SeStringHandling;
 
 namespace Facade.Services;
 
 public interface ILogger
 {
-  void Toast(string pre, string italic = "", string post = "");
-  void Chat(string pre, string italic = "", string post = "", string name = "", XivChatType type = XivChatType.Debug, bool addPrefix = true);
-
-  void Error(string text,
-      [CallerFilePath] string callerPath = "",
-      [CallerMemberName] string callerName = "",
-      [CallerLineNumber] int lineNumber = -1);
-
-  void Error(Exception ex,
-      [CallerFilePath] string callerPath = "",
-      [CallerMemberName] string callerName = "",
-      [CallerLineNumber] int lineNumber = -1);
+  void Chat(string pre,
+    string italic = "",
+    string post = "",
+    string name = "",
+    XivChatType type = XivChatType.Debug,
+    bool addPrefix = true);
 
   void Debug(string text,
-      [CallerFilePath] string callerPath = "",
-      [CallerMemberName] string callerName = "",
-      [CallerLineNumber] int lineNumber = -1);
+    [CallerFilePath] string callerPath = "",
+    [CallerMemberName] string callerName = "",
+    [CallerLineNumber] int lineNumber = -1);
 
-  void DebugObj<T>(T obj,
-      [CallerFilePath] string callerPath = "",
-      [CallerMemberName] string callerName = "",
-      [CallerLineNumber] int lineNumber = -1);
+  void Warn(Exception ex,
+    [CallerFilePath] string callerPath = "",
+    [CallerMemberName] string callerName = "",
+    [CallerLineNumber] int lineNumber = -1);
 
-  void ServiceLifecycle(string? status = null,
-      [CallerFilePath] string callerPath = "",
-      [CallerMemberName] string callerName = "",
-      [CallerLineNumber] int lineNumber = -1);
+  void Error(string text,
+    [CallerFilePath] string callerPath = "",
+    [CallerMemberName] string callerName = "",
+    [CallerLineNumber] int lineNumber = -1);
+
+  void Error(Exception ex,
+    [CallerFilePath] string callerPath = "",
+    [CallerMemberName] string callerName = "",
+    [CallerLineNumber] int lineNumber = -1);
+
+  Task ServiceLifecycle(string? status = null,
+    [CallerFilePath] string callerPath = "",
+    [CallerMemberName] string callerName = "",
+    [CallerLineNumber] int lineNumber = -1);
 }
 
-public class Logger(IPluginLog _pluginLog, IToastGui _toastGui, IChatGui _chatGui) : ILogger
+public class Logger(IPluginLog _pluginLog, IChatGui _chatGui) : ILogger
 {
-  public void Toast(string pre, string italic = "", string post = "")
-  {
-    _toastGui.ShowNormal(
-      new SeStringBuilder()
-        .AddText(pre)
-        .AddItalics(italic)
-        .AddText(post)
-        .Build(),
-      new ToastOptions
-      {
-        Position = ToastPosition.Bottom,
-        Speed = ToastSpeed.Fast,
-      }
-    );
-  }
-
-  public void Chat(string pre, string italic = "", string post = "", string name = "", XivChatType type = XivChatType.Debug, bool addPrefix = true)
+  public void Chat(string pre,
+    string italic = "",
+    string post = "",
+    string name = "",
+    XivChatType type = XivChatType.Debug,
+    bool addPrefix = true)
   {
     XivChatEntry chatMessage = new()
     {
       Type = type,
       Name = new SeStringBuilder().AddText(name).Build(),
       Message = new SeStringBuilder()
-        .AddUiForeground(addPrefix ? "[Facade] " : "", 35)
+        .AddUiForeground(addPrefix ? "[Yarn] " : "", 35)
         .AddText(pre)
         .AddItalics(italic)
         .AddText(post)
@@ -69,72 +61,45 @@ public class Logger(IPluginLog _pluginLog, IToastGui _toastGui, IChatGui _chatGu
     Debug($"Printed chatMessage::'{chatMessage.Message}'");
   }
 
-  private string FormatCallsite(string callerPath = "", string callerName = "", int lineNumber = -1) =>
-    $"[{Path.GetFileName(callerPath)}:{callerName}:{lineNumber}]";
+  private string FormatCallsite(string callerPath, string callerName, int lineNumber)
+    => $"[{Path.GetFileName(callerPath)}:{callerName}:{lineNumber}]";
 
-  public void Error(string text, [CallerFilePath] string callerPath = "", [CallerMemberName] string callerName = "", [CallerLineNumber] int lineNumber = -1)
+  public void Debug(string text,
+    [CallerFilePath] string callerPath = "",
+    [CallerMemberName] string callerName = "",
+    [CallerLineNumber] int lineNumber = -1)
+    => _pluginLog.Debug($"{FormatCallsite(callerPath, callerName, lineNumber)} {text}");
+
+  public void Warn(Exception ex,
+    [CallerFilePath] string callerPath = "",
+    [CallerMemberName] string callerName = "",
+    [CallerLineNumber] int lineNumber = -1)
+    => _pluginLog.Warning($"{FormatCallsite(callerPath, callerName, lineNumber)} Exception: {ex}");
+
+  public void Error(string text,
+    [CallerFilePath] string callerPath = "",
+    [CallerMemberName] string callerName = "",
+    [CallerLineNumber] int lineNumber = -1)
+    => _pluginLog.Error($"{FormatCallsite(callerPath, callerName, lineNumber)} {text}");
+
+  public void Error(Exception ex,
+    [CallerFilePath] string callerPath = "",
+    [CallerMemberName] string callerName = "",
+    [CallerLineNumber] int lineNumber = -1)
+    => _pluginLog.Error($"{FormatCallsite(callerPath, callerName, lineNumber)} Exception: {ex}");
+
+  public Task ServiceLifecycle(string? status = null,
+    [CallerFilePath] string callerPath = "",
+    [CallerMemberName] string callerName = "",
+    [CallerLineNumber] int lineNumber = -1)
   {
-    string logEntry = $"{FormatCallsite(callerPath, callerName, lineNumber)} {text}";
-    _pluginLog.Error(logEntry);
-  }
-
-  public void Error(Exception ex, [CallerFilePath] string callerPath = "", [CallerMemberName] string callerName = "", [CallerLineNumber] int lineNumber = -1)
-  {
-    string logEntry = $"{FormatCallsite(callerPath, callerName, lineNumber)} Exception: {ex}";
-    _pluginLog.Error(logEntry);
-  }
-
-  public void Debug(string text, [CallerFilePath] string callerPath = "", [CallerMemberName] string callerName = "", [CallerLineNumber] int lineNumber = -1)
-  {
-    string logEntry = $"{FormatCallsite(callerPath, callerName, lineNumber)} {text}";
-    _pluginLog.Debug(logEntry);
-  }
-
-  public void DebugObj<T>(T obj, [CallerFilePath] string callerPath = "", [CallerMemberName] string callerName = "", [CallerLineNumber] int lineNumber = -1)
-  {
-    if (obj == null)
-    {
-      Debug("null", callerPath, callerName, lineNumber);
-      return;
-    }
-
-    Type type = typeof(T);
-    StringBuilder sb = new();
-    sb.AppendLine($"Type: {type.Name}");
-
-    PropertyInfo[] properties = type.GetProperties(BindingFlags.Public | BindingFlags.Instance);
-    foreach (PropertyInfo prop in properties)
-    {
-      object? value = prop.GetValue(obj);
-      sb.AppendLine($"  {prop.Name}: {value ?? null}");
-    }
-
-    FieldInfo[] fields = type.GetFields(BindingFlags.Public | BindingFlags.Instance);
-    foreach (FieldInfo field in fields)
-    {
-      object? value = field.GetValue(obj);
-      sb.AppendLine($"  {field.Name}: {value ?? null}");
-    }
-
-    if (properties.Length == 0 && fields.Length == 0)
-      sb.AppendLine("  No public properties or fields found.");
-
-    Debug(sb.ToString(), callerPath, callerName, lineNumber);
-  }
-
-  public void ServiceLifecycle(string? status = null, [CallerFilePath] string callerPath = "", [CallerMemberName] string callerName = "", [CallerLineNumber] int lineNumber = -1)
-  {
+    string className = Path.GetFileNameWithoutExtension(callerPath);
     string lifecycleStage = status ??
       (callerName.Contains("Start")
       ? "started" : callerName.Contains("Stop")
       ? "stopped" : "changed");
 
-    string className = new StackTrace()
-      .GetFrame(1)
-      ?.GetMethod()
-      ?.DeclaringType
-      ?.Name ?? "UnknownClass";
-
     Debug($"{className} {lifecycleStage}", callerPath, callerName, lineNumber);
+    return Task.CompletedTask;
   }
 }

@@ -8,22 +8,26 @@ public interface IExteriorService : IHostedService
   short? GetPlotExterior(sbyte plot, ExteriorItemType type);
   IEnumerable<Facade> GetCurrentFacades();
   FestivalFacade? GetCurrentFestivalFacade();
-  unsafe void UpdateFestival(bool reset = false);
-  unsafe void UpdateExteriors(bool reset = false, List<sbyte>? currentPlots = null);
+  void UpdateFestival(bool reset = false);
+  void UpdateExteriors(bool reset = false, List<sbyte>? currentPlots = null);
 }
 
-public class ExteriorService(ILogger _logger, Configuration _configuration, IPlotService _plotService, IFramework _framework) : IExteriorService
+public class ExteriorService(
+  ILogger _logger,
+  IFramework _framework,
+  IPlotService _plotService,
+  Configuration _configuration) : IExteriorService
 {
   private readonly Dictionary<int, OutdoorPlotExteriorData> _originalExteriorData = [];
   private readonly List<GameMain.Festival> _originalFestival = [];
-  private bool _wasNotLoaded = false;
+  private bool _wasNotLoaded;
 
   public event EventHandler? OnDivisionChange;
 
-  private unsafe HousingManager* _housingManager => HousingManager.Instance();
-  private unsafe LayoutWorld* _layoutWorld => LayoutWorld.Instance();
+  private unsafe HousingManager* HousingManagerInstance => HousingManager.Instance();
+  private unsafe LayoutWorld* LayoutWorldInstance => LayoutWorld.Instance();
   private sbyte _lastWard = -1;
-  private byte _lastDivision = 0;
+  private byte _lastDivision;
   private List<sbyte> _lastPlots = [];
 
   private District _lastDistrict = District.Invalid;
@@ -47,8 +51,9 @@ public class ExteriorService(ILogger _logger, Configuration _configuration, IPlo
   public unsafe PlotSize? GetPlotSize(sbyte plot)
   {
     if (plot < _plotService.DivisionMin | plot >= _plotService.DivisionMax) return null;
-    if (_layoutWorld == null || _layoutWorld->ActiveLayout == null || _layoutWorld->ActiveLayout->OutdoorExteriorData == null || _layoutWorld->ActiveLayout->InitState != 7) return null;
-    Span<OutdoorPlotExteriorData> plots = _layoutWorld->ActiveLayout->OutdoorExteriorData->Plots;
+    if (LayoutWorldInstance == null || LayoutWorldInstance->ActiveLayout == null) return null;
+    if (LayoutWorldInstance->ActiveLayout->OutdoorExteriorData == null || LayoutWorldInstance->ActiveLayout->InitState != 7) return null;
+    Span<OutdoorPlotExteriorData> plots = LayoutWorldInstance->ActiveLayout->OutdoorExteriorData->Plots;
     if (plot >= plots.Length) return null;
     return plots[plot].Size;
   }
@@ -56,8 +61,9 @@ public class ExteriorService(ILogger _logger, Configuration _configuration, IPlo
   public unsafe short? GetPlotExterior(sbyte plot, ExteriorItemType type)
   {
     if (plot < _plotService.DivisionMin | plot >= _plotService.DivisionMax) return null;
-    if (_layoutWorld == null || _layoutWorld->ActiveLayout == null || _layoutWorld->ActiveLayout->OutdoorExteriorData == null || _layoutWorld->ActiveLayout->InitState != 7) return null;
-    Span<OutdoorPlotExteriorData> plots = _layoutWorld->ActiveLayout->OutdoorExteriorData->Plots;
+    if (LayoutWorldInstance == null || LayoutWorldInstance->ActiveLayout == null) return null;
+    if (LayoutWorldInstance->ActiveLayout->OutdoorExteriorData == null || LayoutWorldInstance->ActiveLayout->InitState != 7) return null;
+    Span<OutdoorPlotExteriorData> plots = LayoutWorldInstance->ActiveLayout->OutdoorExteriorData->Plots;
     if (plot >= plots.Length) return null;
     if (type > ExteriorItemType.Fence) return null;
     return plots[plot].HousingExteriorIds[(int)type];
@@ -67,8 +73,7 @@ public class ExteriorService(ILogger _logger, Configuration _configuration, IPlo
   {
     _framework.Update += OnFrameworkUpdate;
 
-    _logger.ServiceLifecycle();
-    return Task.CompletedTask;
+    return _logger.ServiceLifecycle();
   }
 
   public Task StopAsync(CancellationToken cancellationToken)
@@ -78,8 +83,7 @@ public class ExteriorService(ILogger _logger, Configuration _configuration, IPlo
     UpdateExteriors(true);
     UpdateFestival(true);
 
-    _logger.ServiceLifecycle();
-    return Task.CompletedTask;
+    return _logger.ServiceLifecycle();
   }
 
   private void OnFrameworkUpdate(IFramework _)
@@ -103,7 +107,9 @@ public class ExteriorService(ILogger _logger, Configuration _configuration, IPlo
       shouldUpdateFestival = true;
     }
 
-    if (_plotService.CurrentDistrict != _lastDistrict || _plotService.CurrentWard != _lastWard || _plotService.CurrentDivision != _lastDivision)
+    if (_plotService.CurrentDistrict != _lastDistrict
+        || _plotService.CurrentWard != _lastWard
+        || _plotService.CurrentDivision != _lastDivision)
     {
       _lastDistrict = _plotService.CurrentDistrict;
       _lastWard = _plotService.CurrentWard;
@@ -153,7 +159,6 @@ public class ExteriorService(ILogger _logger, Configuration _configuration, IPlo
       Ward = _plotService.CurrentWard,
       Plot = (sbyte)i,
     });
-#pragma warning disable CS0162
 #endif
 
     switch (ActiveFoolery)
@@ -176,9 +181,9 @@ public class ExteriorService(ILogger _logger, Configuration _configuration, IPlo
           PlotSize? plotSize = GetPlotSize(plot);
           return plotSize switch
           {
-            PlotSize.Small => UInt128.Parse("16143016128900140767595426867352700013"),
-            PlotSize.Medium => UInt128.Parse("16143016128900140767595426867352765550"),
-            PlotSize.Large => UInt128.Parse("16143016128900140767595426867352831087"),
+            PlotSize.Small => UInt128.Parse("16143016128900140767595426867352700013", CultureInfo.InvariantCulture),
+            PlotSize.Medium => UInt128.Parse("16143016128900140767595426867352765550", CultureInfo.InvariantCulture),
+            PlotSize.Large => UInt128.Parse("16143016128900140767595426867352831087", CultureInfo.InvariantCulture),
             _ => (UInt128)0,
           };
         }
@@ -195,7 +200,12 @@ public class ExteriorService(ILogger _logger, Configuration _configuration, IPlo
             Plot = (sbyte)i,
           });
       default:
-        return _configuration.Facades.Where(facade => facade.World == _plotService.CurrentWorld && facade.District == _plotService.CurrentDistrict && facade.Ward == _plotService.CurrentWard && facade.Plot >= _plotService.DivisionMin && facade.Plot < _plotService.DivisionMax);
+        return _configuration.Facades.Where(facade =>
+          facade.World == _plotService.CurrentWorld &&
+          facade.District == _plotService.CurrentDistrict &&
+          facade.Ward == _plotService.CurrentWard &&
+          facade.Plot >= _plotService.DivisionMin &&
+          facade.Plot < _plotService.DivisionMax);
     }
   }
 
@@ -203,7 +213,10 @@ public class ExteriorService(ILogger _logger, Configuration _configuration, IPlo
   {
     if (ActiveFoolery != Foolery.None) return null;
 
-    return _configuration.FestivalFacades.FirstOrDefault(facade => facade.World == _plotService.CurrentWorld && facade.District == _plotService.CurrentDistrict && facade.Ward == _plotService.CurrentWard);
+    return _configuration.FestivalFacades.FirstOrDefault(facade =>
+      facade.World == _plotService.CurrentWorld &&
+      facade.District == _plotService.CurrentDistrict &&
+      facade.Ward == _plotService.CurrentWard);
   }
 
   private unsafe void SetFestival(List<GameMain.Festival> festivals)
@@ -219,14 +232,14 @@ public class ExteriorService(ILogger _logger, Configuration _configuration, IPlo
         festivalsArray[i].Phase = festivals[i].Phase;
       }
 
-      if (_layoutWorld == null || _layoutWorld->ActiveLayout == null) return;
-      _layoutWorld->ActiveLayout->SetActiveFestivals(festivalsArray);
+      if (LayoutWorldInstance == null || LayoutWorldInstance->ActiveLayout == null) return;
+      LayoutWorldInstance->ActiveLayout->SetActiveFestivals(festivalsArray);
     }
   }
 
   public unsafe void UpdateFestival(bool reset = false)
   {
-    if (_layoutWorld == null || _layoutWorld->ActiveLayout == null) return;
+    if (LayoutWorldInstance == null || LayoutWorldInstance->ActiveLayout == null) return;
     FestivalFacade? festivalFacade = GetCurrentFestivalFacade();
 
     if (_originalFestival.Count == 8 && (festivalFacade == null || reset))
@@ -238,7 +251,7 @@ public class ExteriorService(ILogger _logger, Configuration _configuration, IPlo
     {
       if (_originalFestival.Count == 0)
       {
-        foreach (GameMain.Festival festival in _layoutWorld->ActiveLayout->ActiveFestivals)
+        foreach (GameMain.Festival festival in LayoutWorldInstance->ActiveLayout->ActiveFestivals)
         {
           _originalFestival.Add(festival);
         }
@@ -256,23 +269,35 @@ public class ExteriorService(ILogger _logger, Configuration _configuration, IPlo
 
   private unsafe void SetExterior(sbyte plot, OutdoorPlotExteriorData exteriorData)
   {
-    if (_layoutWorld == null || _layoutWorld->ActiveLayout == null || _layoutWorld->ActiveLayout->OutdoorExteriorData == null) return;
+    if (LayoutWorldInstance == null ||
+        LayoutWorldInstance->ActiveLayout == null ||
+        LayoutWorldInstance->ActiveLayout->OutdoorExteriorData == null)
+    {
+      return;
+    }
+
     if (plot >= 60) return;
-    if (_layoutWorld->ActiveLayout->OutdoorExteriorData->Plots[plot].Size != exteriorData.Size) return;
-    _layoutWorld->ActiveLayout->HousingLayoutDataUpdatePending = true;
+    if (LayoutWorldInstance->ActiveLayout->OutdoorExteriorData->Plots[plot].Size != exteriorData.Size) return;
+    LayoutWorldInstance->ActiveLayout->HousingLayoutDataUpdatePending = true;
     for (int i = 0; i < 8; i++)
     {
-      _layoutWorld->ActiveLayout->OutdoorExteriorData->Plots[plot].HousingExteriorIds[i] = exteriorData.HousingExteriorIds[i];
-      _layoutWorld->ActiveLayout->OutdoorExteriorData->Plots[plot].StainIds[i] = exteriorData.StainIds[i];
+      LayoutWorldInstance->ActiveLayout->OutdoorExteriorData->Plots[plot].HousingExteriorIds[i] = exteriorData.HousingExteriorIds[i];
+      LayoutWorldInstance->ActiveLayout->OutdoorExteriorData->Plots[plot].StainIds[i] = exteriorData.StainIds[i];
     }
   }
 
-  public unsafe void UpdateExteriors(bool reset = false, List<sbyte>? _currentPlots = null)
+  public unsafe void UpdateExteriors(bool reset = false, List<sbyte>? currentPlots = null)
   {
-    List<sbyte> currentPlots = _currentPlots ?? _plotService.GetCurrentPlots(reset);
+    currentPlots ??= _plotService.GetCurrentPlots(reset);
 
-    if (_layoutWorld == null || _layoutWorld->ActiveLayout == null || _layoutWorld->ActiveLayout->OutdoorExteriorData == null) return;
-    Span<OutdoorPlotExteriorData> exteriorPlots = _layoutWorld->ActiveLayout->OutdoorExteriorData->Plots;
+    if (LayoutWorldInstance == null ||
+        LayoutWorldInstance->ActiveLayout == null ||
+        LayoutWorldInstance->ActiveLayout->OutdoorExteriorData == null)
+    {
+      return;
+    }
+
+    Span<OutdoorPlotExteriorData> exteriorPlots = LayoutWorldInstance->ActiveLayout->OutdoorExteriorData->Plots;
     List<int> handledPlots = [];
 
     IEnumerable<Facade> facades = GetCurrentFacades();
@@ -316,7 +341,8 @@ public class ExteriorService(ILogger _logger, Configuration _configuration, IPlo
           }
         }
 
-        (ushort? roof, ushort? walls, ushort? windows, ushort? door, ushort? optionalRoof, ushort? optionalWall, ushort? optionalSignboard, ushort? fence) = facade.PackedExteriorIds.Unpack();
+        (ushort? roof, ushort? walls, ushort? windows, ushort? door, ushort? optionalRoof, ushort? optionalWall,
+         ushort? optionalSignboard, ushort? fence) = facade.PackedExteriorIds.Unpack();
 
         SetType(exteriorData.HousingExteriorIds, ExteriorItemType.Roof, roof, (data, index) => data.HousingExteriorIds[index]);
         SetType(exteriorData.HousingExteriorIds, ExteriorItemType.Walls, walls, (data, index) => data.HousingExteriorIds[index]);
@@ -327,7 +353,8 @@ public class ExteriorService(ILogger _logger, Configuration _configuration, IPlo
         SetType(exteriorData.HousingExteriorIds, ExteriorItemType.OptionalSignboard, optionalSignboard, (data, index) => data.HousingExteriorIds[index]);
         SetType(exteriorData.HousingExteriorIds, ExteriorItemType.Fence, fence, (data, index) => data.HousingExteriorIds[index]);
 
-        (ushort? roofStain, ushort? wallsStain, ushort? windowsStain, ushort? doorStain, ushort? optionalRoofStain, ushort? optionalWallStain, ushort? optionalSignboardStain, ushort? fenceStain) = facade.PackedStainIds.Unpack();
+        (ushort? roofStain, ushort? wallsStain, ushort? windowsStain, ushort? doorStain, ushort? optionalRoofStain,
+         ushort? optionalWallStain, ushort? optionalSignboardStain, ushort? fenceStain) = facade.PackedStainIds.Unpack();
 
         SetType(exteriorData.StainIds, ExteriorItemType.Roof, roofStain, (data, index) => data.StainIds[index]);
         SetType(exteriorData.StainIds, ExteriorItemType.Walls, wallsStain, (data, index) => data.StainIds[index]);

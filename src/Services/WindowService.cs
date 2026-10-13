@@ -2,7 +2,11 @@ namespace Facade.Services;
 
 public interface IWindowService : IHostedService;
 
-public class WindowService(ILogger _logger, ConfigWindow _configWindow, WindowSystem _windowSystem, IDalamudPluginInterface _pluginInterface) : IWindowService
+public class WindowService(
+  ILogger _logger,
+  ConfigWindow _configWindow,
+  WindowSystem _windowSystem,
+  IDalamudPluginInterface _pluginInterface) : IWindowService
 {
   public Task StartAsync(CancellationToken cancellationToken)
   {
@@ -17,8 +21,7 @@ public class WindowService(ILogger _logger, ConfigWindow _configWindow, WindowSy
     _configWindow.IsOpen = true;
 #endif
 
-    _logger.ServiceLifecycle();
-    return Task.CompletedTask;
+    return _logger.ServiceLifecycle();
   }
 
   public Task StopAsync(CancellationToken cancellationToken)
@@ -29,40 +32,25 @@ public class WindowService(ILogger _logger, ConfigWindow _configWindow, WindowSy
 
     _windowSystem.RemoveAllWindows();
 
-    _logger.ServiceLifecycle();
-    return Task.CompletedTask;
+    return _logger.ServiceLifecycle();
   }
 
-  private void ToggleConfigUi()
-  {
-    if (_configWindow.IsOpen && !_configWindow.SettingsOpen)
-    {
-      _configWindow.SettingsOpen = true;
-    }
-    else
-    {
-      _configWindow.SettingsOpen = true;
-      _configWindow.OverlayOpen = false;
-      _configWindow.Toggle();
-    }
-  }
+  private void ToggleConfigUi() => ToggleUi(settings: true);
 
-  private void ToggleMainUi()
+  private void ToggleMainUi() => ToggleUi(settings: false);
+
+  private void ToggleUi(bool settings)
   {
-    if (_configWindow.IsOpen && _configWindow.SettingsOpen)
+    if (_configWindow.IsOpen && _configWindow.SettingsOpen != settings)
     {
       _configWindow.SettingsOpen = false;
+      return;
     }
-    else
-    {
-      _configWindow.SettingsOpen = false;
-      _configWindow.OverlayOpen = false;
-      _configWindow.Toggle();
-    }
+
+    _configWindow.SettingsOpen = settings;
+    _configWindow.OverlayOpen = false;
+    _configWindow.Toggle();
   }
 
-  private void UiBuilderOnDraw()
-  {
-    _windowSystem.Draw();
-  }
+  private void UiBuilderOnDraw() => _windowSystem.Draw();
 }

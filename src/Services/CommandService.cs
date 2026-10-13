@@ -2,8 +2,11 @@ namespace Facade.Services;
 
 public interface ICommandService : IHostedService;
 
-#pragma warning disable CS9113
-public class CommandService(ILogger _logger, ConfigWindow _configWindow, ICommandManager _commandManager, IPlotService _plotService, IDalamudPluginInterface _pluginInterface) : ICommandService
+public class CommandService(
+  ILogger _logger,
+  ConfigWindow _configWindow,
+  ICommandManager _commandManager,
+  IDalamudPluginInterface _pluginInterface) : ICommandService
 {
   private const string FacadeCommand = "/facade";
 
@@ -14,19 +17,17 @@ public class CommandService(ILogger _logger, ConfigWindow _configWindow, IComman
       HelpMessage = $"See '{FacadeCommand} help' for more."
     });
 
-    _logger.ServiceLifecycle();
-    return Task.CompletedTask;
+    return _logger.ServiceLifecycle();
   }
 
   public Task StopAsync(CancellationToken cancellationToken)
   {
     _commandManager.RemoveHandler(FacadeCommand);
 
-    _logger.ServiceLifecycle();
-    return Task.CompletedTask;
+    return _logger.ServiceLifecycle();
   }
 
-  private async void OnCommand(string command, string arguments)
+  private void OnCommand(string command, string arguments)
   {
     _logger.Debug($"command::'{command}' arguments::'{arguments}'");
 

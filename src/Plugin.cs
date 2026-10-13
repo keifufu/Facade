@@ -1,16 +1,14 @@
-using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using ILogger = Facade.Services.ILogger;
 
 namespace Facade;
 
-public sealed class Plugin : IDalamudPlugin
+public sealed class Plugin : IAsyncDalamudPlugin
 {
   private readonly IHost _host;
 
   public Plugin(
     IChatGui chatGui,
-    IToastGui toastGui,
     IPluginLog pluginLog,
     IFramework framework,
     IDataManager dataManager,
@@ -30,7 +28,6 @@ public sealed class Plugin : IDalamudPlugin
       }).ConfigureServices(collection =>
       {
         collection.AddSingleton(chatGui);
-        collection.AddSingleton(toastGui);
         collection.AddSingleton(pluginLog);
         collection.AddSingleton(framework);
         collection.AddSingleton(dataManager);
@@ -57,8 +54,6 @@ public sealed class Plugin : IDalamudPlugin
         collection.AddHostedService(sp => sp.GetRequiredService<ICommandService>());
         collection.AddHostedService(sp => sp.GetRequiredService<IExteriorService>());
       }).Build();
-
-    _host.StartAsync();
   }
 
   private Configuration InitializeConfiguration(IServiceProvider s)
@@ -69,9 +64,12 @@ public sealed class Plugin : IDalamudPlugin
     return configuration;
   }
 
-  public void Dispose()
+  public async Task LoadAsync(CancellationToken cancellationToken)
+    => await _host.StartAsync(cancellationToken);
+
+  public async ValueTask DisposeAsync()
   {
-    _host.StopAsync().ConfigureAwait(false).GetAwaiter().GetResult();
+    await _host.StopAsync();
     _host.Dispose();
   }
 }

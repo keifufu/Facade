@@ -22,43 +22,43 @@ public interface IPlotService : IHostedService
 #endif
 }
 
-public class PlotService(ILogger _logger, Configuration _configuration, IClientState _clientState, IDalamudPluginInterface _pluginInterface, IPlayerState _playerState, IObjectTable _objectTable) : IPlotService
+public class PlotService(
+  ILogger _logger,
+  IClientState _clientState,
+  IObjectTable _objectTable,
+  IPlayerState _playerState,
+  Configuration _configuration,
+  IDalamudPluginInterface _pluginInterface) : IPlotService
 {
-  private Dictionary<(District District, byte Division), List<Plot>> _plots = [];
+  private readonly Dictionary<(District District, byte Division), List<Plot>> _plots = [];
+  private readonly JsonSerializerOptions _jsonOptions = new() { Converters = { new Vector2Converter() } };
 
   public Task StartAsync(CancellationToken cancellationToken)
   {
     string plotsJsonPath = Path.Combine(_pluginInterface.AssemblyLocation.Directory?.FullName!, "plots.json");
-    if (!File.Exists(plotsJsonPath)) throw new Exception("Failed to find plots.json");
+    if (!File.Exists(plotsJsonPath)) throw new FileNotFoundException("Failed to find plots.json", plotsJsonPath);
 
     string json = File.ReadAllText(plotsJsonPath);
-    JsonSerializerOptions options = new()
-    {
-      Converters = { new Vector2Converter() }
-    };
-
-    List<SimplePlot>? simplePlots = JsonSerializer.Deserialize<List<SimplePlot>>(json, options) ?? throw new Exception("Failed to deserialize plots.json");
+    List<SimplePlot>? simplePlots = JsonSerializer.Deserialize<List<SimplePlot>>(json, _jsonOptions)
+      ?? throw new InvalidDataException("Failed to deserialize plots.json");
 
     foreach (SimplePlot simplePlot in simplePlots)
     {
       (District District, byte Division) key = (simplePlot.District, simplePlot.Division);
-
-      if (!_plots.ContainsKey(key))
+      if (!_plots.TryGetValue(key, out List<Plot>? plots))
       {
-        _plots[key] = [];
+        plots = [];
+        _plots[key] = plots;
       }
 
-      _plots[key].AddRange(simplePlot.Plots);
+      plots.AddRange(simplePlot.Plots);
     }
-    _logger.ServiceLifecycle();
-    return Task.CompletedTask;
+
+    return _logger.ServiceLifecycle();
   }
 
   public Task StopAsync(CancellationToken cancellationToken)
-  {
-    _logger.ServiceLifecycle();
-    return Task.CompletedTask;
-  }
+    => _logger.ServiceLifecycle();
 
   public uint CurrentWorld => _playerState.CurrentWorld.RowId;
   public District CurrentDistrict
@@ -72,9 +72,9 @@ public class PlotService(ILogger _logger, Configuration _configuration, IClientS
       return District.Invalid;
     }
   }
-  private unsafe HousingManager* _housingManager => HousingManager.Instance();
-  public unsafe sbyte CurrentWard => _housingManager == null ? (sbyte)-1 : _housingManager->GetCurrentWard();
-  public unsafe byte CurrentDivision => _housingManager == null ? (byte)0 : _housingManager->GetCurrentDivision();
+  private unsafe HousingManager* HousingManagerInstance => HousingManager.Instance();
+  public unsafe sbyte CurrentWard => HousingManagerInstance == null ? (sbyte)-1 : HousingManagerInstance->GetCurrentWard();
+  public unsafe byte CurrentDivision => HousingManagerInstance == null ? (byte)0 : HousingManagerInstance->GetCurrentDivision();
   public int DivisionMin => CurrentDivision == 1 ? 0 : 30;
   public int DivisionMax => CurrentDivision == 1 ? 30 : 60;
 
@@ -86,7 +86,6 @@ public class PlotService(ILogger _logger, Configuration _configuration, IClientS
   {
 #if SAVE_MODE
     return [];
-#pragma warning disable CS0162
 #endif
 
     if (CurrentWard == -1) return [];
@@ -95,7 +94,10 @@ public class PlotService(ILogger _logger, Configuration _configuration, IClientS
     List<(Vector2, uint)> positions = [];
     foreach (IBattleChara player in _objectTable.PlayerObjects)
     {
-      if (_configuration.PlayerBehavior != PlayerBehavior.Nothing || _previousPlayerBehavior != _configuration.PlayerBehavior || player.EntityId == _objectTable.LocalPlayer.EntityId || reset)
+      if (_configuration.PlayerBehavior != PlayerBehavior.Nothing ||
+          _previousPlayerBehavior != _configuration.PlayerBehavior ||
+          player.EntityId == _objectTable.LocalPlayer.EntityId ||
+          reset)
       {
         positions.Add((new(player.Position.X, player.Position.Z), player.EntityId));
         if (_hiddenPlayers.Contains(player.EntityId))
@@ -106,12 +108,18 @@ public class PlotService(ILogger _logger, Configuration _configuration, IClientS
       }
     }
 
-    if (positions.SequenceEqual(_lastPositions) && _configuration.PlayerBehavior == _previousPlayerBehavior && _configuration.PlayerBehavior != PlayerBehavior.HidePlayers) return _lastPlots;
+    if (positions.SequenceEqual(_lastPositions) &&
+      _configuration.PlayerBehavior == _previousPlayerBehavior &&
+      _configuration.PlayerBehavior != PlayerBehavior.HidePlayers)
+    {
+      return _lastPlots;
+    }
+
     _lastPositions = positions;
     _previousPlayerBehavior = _configuration.PlayerBehavior;
 
     _plots.TryGetValue((CurrentDistrict, CurrentDivision), out List<Plot>? plots);
-    if (plots == null) return [_housingManager->GetCurrentPlot()];
+    if (plots == null) return [HousingManagerInstance->GetCurrentPlot()];
 
     List<sbyte> localPlayerPlots = [];
     List<sbyte> currentPlots = [];
@@ -144,7 +152,7 @@ public class PlotService(ILogger _logger, Configuration _configuration, IClientS
     }
 
     // Always also add this as a fallback.
-    currentPlots.Add(_housingManager->GetCurrentPlot());
+    currentPlots.Add(HousingManagerInstance->GetCurrentPlot());
     _lastPlots = currentPlots;
 
     return _lastPlots;

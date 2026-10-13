@@ -17,31 +17,31 @@ public enum District : uint
 [Serializable]
 public class Facade
 {
-  public required uint World;
-  public required District District;
-  public required sbyte Ward;
-  public required sbyte Plot;
-  public required bool IsUnitedExterior;
-  public required UInt128 PackedExteriorIds;
-  public required UInt128 PackedStainIds;
+  public required uint World { get; init; }
+  public required District District { get; init; }
+  public required sbyte Ward { get; init; }
+  public required sbyte Plot { get; set; }
+  public required bool IsUnitedExterior { get; set; }
+  public required UInt128 PackedExteriorIds { get; set; }
+  public required UInt128 PackedStainIds { get; set; }
 }
 
 [Serializable]
 public class FestivalFacade
 {
-  public required uint World;
-  public required District District;
-  public required sbyte Ward;
-  public required ushort Id;
+  public required uint World { get; init; }
+  public required District District { get; init; }
+  public required sbyte Ward { get; init; }
+  public required ushort Id { get; set; }
 }
 
 [Serializable]
 public class Preset
 {
-  public required string Name;
-  public required UInt128 PackedExteriorIds;
-  public required UInt128 PackedStainIds;
-  public required PlotSize PlotSize;
+  public required string Name { get; set; }
+  public required UInt128 PackedExteriorIds { get; set; }
+  public required UInt128 PackedStainIds { get; set; }
+  public required PlotSize PlotSize { get; init; }
 }
 
 [Serializable]
@@ -55,7 +55,7 @@ public enum PlayerBehavior
 [Serializable]
 public class Configuration : IPluginConfiguration
 {
-  public int Version { get; set; } = 0;
+  public int Version { get; set; }
 
   public List<Facade> Facades { get; set; } = [];
   public List<FestivalFacade> FestivalFacades { get; set; } = [];
@@ -64,18 +64,16 @@ public class Configuration : IPluginConfiguration
   public bool Foolery { get; set; } = true;
 
   [NonSerialized]
-  private IDalamudPluginInterface? PluginInterface;
+  private IDalamudPluginInterface _pluginInterface = null!;
 
   public void Initialize(IDalamudPluginInterface pluginInterface)
-  {
-    PluginInterface = pluginInterface;
-  }
+    => _pluginInterface = pluginInterface;
 
   public void Save()
   {
     Facades = Facades.OrderBy(f => f.World).ThenBy(f => f.District).ThenBy(f => f.Ward).ThenBy(f => f.Plot).ToList();
     Presets = Presets.OrderBy(f => f.PlotSize).ToList();
-    PluginInterface!.SavePluginConfig(this);
+    _pluginInterface.SavePluginConfig(this);
   }
 }
 
