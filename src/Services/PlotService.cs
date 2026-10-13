@@ -28,7 +28,11 @@ public class PlotService(
   IObjectTable _objectTable,
   IPlayerState _playerState,
   Configuration _configuration,
-  IDalamudPluginInterface _pluginInterface) : IPlotService
+  IDalamudPluginInterface _pluginInterface
+#if SAVE_MODE
+  , IFramework _framework
+#endif
+) : IPlotService
 {
   private readonly Dictionary<(District District, byte Division), List<Plot>> _plots = [];
   private readonly JsonSerializerOptions _jsonOptions = new() { Converters = { new Vector2Converter() } };
@@ -160,8 +164,9 @@ public class PlotService(
 
 #if SAVE_MODE
   public unsafe void SaveCorner()
+    => _framework.Run(() =>
   {
-    sbyte plot = _housingManager->GetCurrentPlot();
+    sbyte plot = HousingManagerInstance->GetCurrentPlot();
     if (plot == -1)
     {
       _logger.Chat("You're not on a plot.");
@@ -204,7 +209,7 @@ public class PlotService(
     plots.Add(p);
     _plots.Remove((CurrentDistrict, CurrentDivision));
     _plots.Add((CurrentDistrict, CurrentDivision), plots);
-  }
+  });
 
   public void SaveJson()
   {
@@ -215,11 +220,7 @@ public class PlotService(
       kvp.Key.Division,
       Plots = kvp.Value
     });
-    JsonSerializerOptions options = new()
-    {
-      Converters = { new Vector2Converter() }
-    };
-    string json = JsonSerializer.Serialize(simplePlots, options);
+    string json = JsonSerializer.Serialize(simplePlots, _jsonOptions);
     File.WriteAllText(filePath, json);
     _logger.Chat($"Saved plots.json to '{filePath}'");
   }
@@ -228,9 +229,9 @@ public class PlotService(
 
 public class SimplePlot
 {
-  public required District District;
-  public required byte Division;
-  public required List<Plot> Plots;
+  public required District District { get; init; }
+  public required byte Division { get; init; }
+  public required List<Plot> Plots { get; init; }
 }
 
 public class Plot

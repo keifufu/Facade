@@ -6,7 +6,11 @@ public class CommandService(
   ILogger _logger,
   ConfigWindow _configWindow,
   ICommandManager _commandManager,
-  IDalamudPluginInterface _pluginInterface) : ICommandService
+  IDalamudPluginInterface _pluginInterface
+#if SAVE_MODE
+  , IPlotService _plotService
+#endif
+) : ICommandService
 {
   private const string FacadeCommand = "/facade";
 

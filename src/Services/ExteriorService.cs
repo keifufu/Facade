@@ -91,9 +91,9 @@ public class ExteriorService(
 #if SAVE_MODE
     unsafe
     {
-      if (_housingManager != null && _housingManager->OutdoorTerritory != null)
+      if (HousingManagerInstance != null && HousingManagerInstance->OutdoorTerritory != null)
       {
-        _housingManager->OutdoorTerritory->FurnitureStruct.FurnitureVector.Clear();
+        HousingManagerInstance->OutdoorTerritory->FurnitureManager.FurnitureVector.Clear();
       }
     }
 #endif
@@ -154,7 +154,7 @@ public class ExteriorService(
       World = _plotService.CurrentWorld,
       District = _plotService.CurrentDistrict,
       IsUnitedExterior = false,
-      PackedExteriorIds = UInt128.Parse("15976697433711664612988337205245378560"),
+      PackedExteriorIds = UInt128.Parse("15976697433711664612988337205245378560", CultureInfo.InvariantCulture),
       PackedStainIds = 0,
       Ward = _plotService.CurrentWard,
       Plot = (sbyte)i,
@@ -287,6 +287,7 @@ public class ExteriorService(
   }
 
   public unsafe void UpdateExteriors(bool reset = false, List<sbyte>? currentPlots = null)
+    => _framework.Run(() =>
   {
     currentPlots ??= _plotService.GetCurrentPlots(reset);
 
@@ -380,7 +381,7 @@ public class ExteriorService(
         }
       }
     }
-  }
+  });
 }
 
 public enum ExteriorItemType : ushort
