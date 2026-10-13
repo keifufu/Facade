@@ -9,25 +9,25 @@ public class ConfigWindow(
   ITextureProvider _textureProvider,
   IDalamudPluginInterface _pluginInterface) : Window("Facade##FacadeConfigWindow"), IHostedService
 {
-  private bool _addingFacade;
-  private Facade? _editingFacade;
-  private sbyte? _selectedPlot;
+  private bool _addingFacade = false;
+  private Facade? _editingFacade = null;
+  private sbyte? _selectedPlot = null;
   private UInt128 _packedSelectedExterior = UInt128Extensions.Pack(null, null, null, null, null, null, null, null);
   private UInt128 _packedSelectedStain = UInt128Extensions.Pack(null, null, null, null, null, null, null, null);
   private bool _unitedExteriorSelection = true;
-  private bool _festivalView;
+  private bool _festivalView = false;
   private OverlayContent _overlayContent = OverlayContent.FacadeLocations;
   private string _presetName = "";
-  private DateTime _lastExport;
-  private DateTime _lastFailedImport;
-  private DateTime _lastImport;
+  private DateTime _lastExport = DateTime.MinValue;
+  private DateTime _lastFailedImport = DateTime.MinValue;
+  private DateTime _lastImport = DateTime.MinValue;
   private List<Facade> _importingFacades = [];
 
   private bool IsShiftDown => ImGui.IsKeyDown(ImGuiKey.ModShift);
   private bool IsCtrlDown => ImGui.IsKeyDown(ImGuiKey.ModCtrl);
 
-  public bool SettingsOpen { get; set; }
-  public bool OverlayOpen { get; set; }
+  public bool SettingsOpen = false;
+  public bool OverlayOpen = false;
 
   // Took the most recent events as the older ones don't have models for newer districts.
   private readonly List<Festival> _festivals = [
@@ -1460,20 +1460,20 @@ public class ConfigWindow(
   }
 }
 
-public readonly struct ExteriorItem
+public struct ExteriorItem
 {
-  public required PlotSize? Size { get; init; }
-  public required ExteriorItemType Type { get; init; }
-  public required UInt128 Id { get; init; }
-  public required string Name { get; init; }
-  public required ushort Icon { get; init; }
-  public required uint? UnitedExteriorId { get; init; }
+  public required PlotSize? Size;
+  public required ExteriorItemType Type;
+  public required UInt128 Id;
+  public required string Name;
+  public required ushort Icon;
+  public required uint? UnitedExteriorId;
 }
 
 public struct Festival
 {
-  public required ushort Id { get; set; }
-  public required string Name { get; set; }
+  public required ushort Id;
+  public required string Name;
 }
 
 public enum OverlayContent

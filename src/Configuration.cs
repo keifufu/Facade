@@ -17,31 +17,31 @@ public enum District : uint
 [Serializable]
 public class Facade
 {
-  public required uint World { get; init; }
-  public required District District { get; init; }
-  public required sbyte Ward { get; init; }
-  public required sbyte Plot { get; set; }
-  public required bool IsUnitedExterior { get; set; }
-  public required UInt128 PackedExteriorIds { get; set; }
-  public required UInt128 PackedStainIds { get; set; }
+  public required uint World;
+  public required District District;
+  public required sbyte Ward;
+  public required sbyte Plot;
+  public required bool IsUnitedExterior;
+  public required UInt128 PackedExteriorIds;
+  public required UInt128 PackedStainIds;
 }
 
 [Serializable]
 public class FestivalFacade
 {
-  public required uint World { get; init; }
-  public required District District { get; init; }
-  public required sbyte Ward { get; init; }
-  public required ushort Id { get; set; }
+  public required uint World;
+  public required District District;
+  public required sbyte Ward;
+  public required ushort Id;
 }
 
 [Serializable]
 public class Preset
 {
-  public required string Name { get; set; }
-  public required UInt128 PackedExteriorIds { get; set; }
-  public required UInt128 PackedStainIds { get; set; }
-  public required PlotSize PlotSize { get; init; }
+  public required string Name;
+  public required UInt128 PackedExteriorIds;
+  public required UInt128 PackedStainIds;
+  public required PlotSize PlotSize;
 }
 
 [Serializable]
@@ -55,13 +55,13 @@ public enum PlayerBehavior
 [Serializable]
 public class Configuration : IPluginConfiguration
 {
-  public int Version { get; set; }
+  public int Version { get; set; } = 0;
 
-  public List<Facade> Facades { get; set; } = [];
-  public List<FestivalFacade> FestivalFacades { get; set; } = [];
-  public List<Preset> Presets { get; set; } = [];
-  public PlayerBehavior PlayerBehavior { get; set; } = PlayerBehavior.Nothing;
-  public bool Foolery { get; set; } = true;
+  public List<Facade> Facades = [];
+  public List<FestivalFacade> FestivalFacades = [];
+  public List<Preset> Presets = [];
+  public PlayerBehavior PlayerBehavior = PlayerBehavior.Nothing;
+  public bool Foolery = true;
 
   [NonSerialized]
   private IDalamudPluginInterface _pluginInterface = null!;

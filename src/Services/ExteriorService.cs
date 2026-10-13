@@ -20,14 +20,14 @@ public class ExteriorService(
 {
   private readonly Dictionary<int, OutdoorPlotExteriorData> _originalExteriorData = [];
   private readonly List<GameMain.Festival> _originalFestival = [];
-  private bool _wasNotLoaded;
+  private bool _wasNotLoaded = false;
 
   public event EventHandler? OnDivisionChange;
 
   private unsafe HousingManager* HousingManagerInstance => HousingManager.Instance();
   private unsafe LayoutWorld* LayoutWorldInstance => LayoutWorld.Instance();
   private sbyte _lastWard = -1;
-  private byte _lastDivision;
+  private byte _lastDivision = 0;
   private List<sbyte> _lastPlots = [];
 
   private District _lastDistrict = District.Invalid;

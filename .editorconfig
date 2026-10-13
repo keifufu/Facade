@@ -13,9 +13,11 @@ trim_trailing_whitespace = true
 dotnet_analyzer_diagnostic.severity = warning
 
 dotnet_diagnostic.CA1001.severity = none
+dotnet_diagnostic.CA1051.severity = none
 dotnet_diagnostic.CA1507.severity = none
 dotnet_diagnostic.CA1707.severity = none
 dotnet_diagnostic.CA1716.severity = none
+dotnet_diagnostic.CA1805.severity = none
 dotnet_diagnostic.CA1822.severity = none
 dotnet_diagnostic.CA1859.severity = none
 

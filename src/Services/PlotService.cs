@@ -228,18 +228,18 @@ public class PlotService(
 
 public class SimplePlot
 {
-  public required District District { get; set; }
-  public required byte Division { get; set; }
-  public required List<Plot> Plots { get; set; }
+  public required District District;
+  public required byte Division;
+  public required List<Plot> Plots;
 }
 
 public class Plot
 {
-  public sbyte PlotId { get; set; }
-  public Vector2 C1 { get; set; }
-  public Vector2 C2 { get; set; }
-  public Vector2 C3 { get; set; }
-  public Vector2 C4 { get; set; }
+  public sbyte PlotId;
+  public Vector2 C1;
+  public Vector2 C2;
+  public Vector2 C3;
+  public Vector2 C4;
 
   public bool IsInside(Vector2 position, float padding)
   {
