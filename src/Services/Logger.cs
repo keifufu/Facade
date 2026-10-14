@@ -37,7 +37,10 @@ public interface ILogger
     [CallerLineNumber] int lineNumber = -1);
 }
 
-public class Logger(IPluginLog _pluginLog, IChatGui _chatGui) : ILogger
+public class Logger(
+  IChatGui _chatGui,
+  IPluginLog _pluginLog,
+  IDalamudPluginInterface _pluginInterface) : ILogger
 {
   public void Chat(string pre,
     string italic = "",
@@ -51,7 +54,7 @@ public class Logger(IPluginLog _pluginLog, IChatGui _chatGui) : ILogger
       Type = type,
       Name = new SeStringBuilder().AddText(name).Build(),
       Message = new SeStringBuilder()
-        .AddUiForeground(addPrefix ? "[Yarn] " : "", 35)
+        .AddUiForeground(addPrefix ? $"[{_pluginInterface.InternalName}] " : "", 35)
         .AddText(pre)
         .AddItalics(italic)
         .AddText(post)
